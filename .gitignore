@@ -1,0 +1,12 @@
+# Окружение и кеш
+.venv/
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.junie/
+
+# Личное сохранение игры
+save.json
+save.tmp
