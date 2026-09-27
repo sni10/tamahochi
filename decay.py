@@ -53,7 +53,7 @@ def _clamp(value: float) -> float:
 
 def _step(s: PetState, seconds: float, night: bool) -> None:
     s.age += seconds
-    if s.stage == evolution.EGG:  # в яйце ничего не тратится, только растём
+    if s.stage == evolution.BIRTH:  # в яйце/корзинке ничего не тратится, только растём
         evolution.grow(s)
         return
 
@@ -122,7 +122,7 @@ def apply(s: PetState, seconds: float, quiet: Quiet = None) -> None:
         was_night = is_night(s.clock, quiet)
         s.clock += chunk
         night = is_night(s.clock, quiet)
-        if s.stage != evolution.EGG:
+        if s.stage != evolution.BIRTH:
             if night and not was_night:
                 s.sleeping = True   # наступила ночь — спать
             elif was_night and not night:

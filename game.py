@@ -42,7 +42,7 @@ FEED, PLAY, SLEEP, CLEAN, SETTINGS = range(len(ICONS))
 
 # Длительность анимаций в тиках; пока анимация идёт, кнопки игнорируются.
 ANIM_LENGTH = {"eat": 8, "play": 8, "no": 4, "clean": 6, "evolve": 10}
-EGG_CRACK_BEFORE = 60  # за сколько игровых секунд до вылупления яйцо трескается
+WAKE_BEFORE = 60  # за сколько игровых секунд до появления яйцо трескается / корзинка шевелится
 
 FEED_AMOUNT = 15
 FEED_DIGESTION = 25   # еда ускоряет появление кучки
@@ -86,11 +86,15 @@ class Game:
         stage = "adult_normal" if self.mode == "select" else self.state.stage
         return self.skin.look(stage)
 
-    def _is_egg(self) -> bool:
-        return self.mode != "select" and self.state.stage == evolution.EGG
+    def _is_birth(self) -> bool:
+        """Питомец ещё в яйце или корзинке."""
+        return self.mode != "select" and self.state.stage == evolution.BIRTH
+
+    def _birth_sprite(self, waking: bool) -> sprites.Sprite:
+        return sprites.BIRTH[self.skin.birth][1 if waking else 0]
 
     def _pet_w(self) -> int:
-        return sprites.EGG.w if self._is_egg() else self.look.w
+        return self._birth_sprite(False).w if self._is_birth() else self.look.w
 
     @staticmethod
     def _y_for(h: int) -> int:
@@ -127,7 +131,7 @@ class Game:
         self.mode_ticks += 1
         if self.mode in ANIM_LENGTH and self.mode_ticks >= ANIM_LENGTH[self.mode]:
             self._set_mode("idle")
-        if self.mode == "idle" and not self.state.sleeping and not self._is_egg():
+        if self.mode == "idle" and not self.state.sleeping and not self._is_birth():
             self._walk()
 
     def _set_mode(self, mode: str) -> None:
@@ -196,8 +200,8 @@ class Game:
             self.settings_field = 0
             self._set_mode("settings")
             return
-        if self._is_egg():
-            return  # яйцу ничего не нужно
+        if self._is_birth():
+            return  # в яйце/корзинке ничего не нужно
         s = self.state
         if self.selected == SLEEP:
             s.sleeping = not s.sleeping
@@ -321,8 +325,8 @@ class Game:
 
     def _draw_pet(self, lcd, x: int) -> None:
         s = self.state
-        if self._is_egg():
-            self._draw_egg(lcd)
+        if self._is_birth():
+            self._draw_birth(lcd)
             return
         look = self.look
         y = self._y_for(look.h)
@@ -337,11 +341,11 @@ class Game:
         frames = look.sad if sad else look.idle
         lcd.blit(frames[self.frame % 2], x, y, flip=self.pet_dir < 0)
 
-    def _draw_egg(self, lcd) -> None:
-        cracking = self.state.age >= evolution.EGG_UNTIL - EGG_CRACK_BEFORE
-        wobble = (0, 1, 0, -1)[self.frame % 4] if cracking or self.frame % 8 < 4 else 0
-        egg = sprites.EGG_CRACK if cracking else sprites.EGG
-        lcd.blit(egg, self._home_x() + wobble, self._y_for(egg.h))
+    def _draw_birth(self, lcd) -> None:
+        waking = self.state.age >= evolution.BIRTH_UNTIL - WAKE_BEFORE
+        wobble = (0, 1, 0, -1)[self.frame % 4] if waking or self.frame % 8 < 4 else 0
+        sprite = self._birth_sprite(waking)
+        lcd.blit(sprite, self._home_x() + wobble, self._y_for(sprite.h))
 
     def _draw_idle(self, lcd) -> None:
         x = self._home_x() if self.state.sleeping else self.pet_x
@@ -352,8 +356,8 @@ class Game:
         show_old = self.mode_ticks < ANIM_LENGTH["evolve"] - 4 and self.frame % 2
         if not show_old:
             sprite = self.look.happy
-        elif self.evolved_from == evolution.EGG:
-            sprite = sprites.EGG_CRACK
+        elif self.evolved_from == evolution.BIRTH:
+            sprite = self._birth_sprite(True)
         else:
             sprite = self.skin.look(self.evolved_from).idle[0]
         lcd.blit(sprite, self._center_for(sprite.w), self._y_for(sprite.h))

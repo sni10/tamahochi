@@ -42,7 +42,7 @@
 Питомец растёт по стадиям. Облик взрослого зависит от качества ухода.
 
 ```
-EGG ──► BABY ──► CHILD ──► ADULT (GOOD / NORMAL / BAD)
+BIRTH ──► BABY ──► CHILD ──► ADULT (GOOD / NORMAL / BAD)
 5 мин    1 день   2 дня      навсегда
 ```
 
@@ -52,7 +52,8 @@ EGG ──► BABY ──► CHILD ──► ADULT (GOOD / NORMAL / BAD)
   голод до нуля, неубранная кучка дольше N часов, питомец не уложен спать.
 - Переход CHILD → ADULT: `care_mistakes` 0–2 → GOOD, 3–6 → NORMAL, 7+ → BAD.
 - Стадии различаются не только видом: малыш чаще ест и какает, взрослый стабильнее.
-- Яйцо: одно общее для всех, покачивается и трескается перед вылуплением.
+- Появление на свет (стадия `birth`, 5 мин): птицы — из яйца (трескается), остальные — в
+  корзинке под одеяльцем (бугорок шевелится). Задаётся `birth: egg|basket` в `pet.txt`.
 
 **Спрайты** — раскладываются по папкам вида:
 ```
@@ -60,7 +61,7 @@ assets/pets/cat/
     baby.txt      16×16
     child.txt     22×22
     adult_good.txt / adult_normal.txt / adult_bad.txt   28×28
-assets/world.txt  — [egg1] [egg2] [egg_crack]
+assets/world.txt  — [egg] [egg_crack] [basket] [basket_wake]
 ```
 Загрузчик `PetSkin` расширяется на стадии; размер кадра проверяется по стадии.
 

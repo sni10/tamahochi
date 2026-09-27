@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field, fields
 @dataclass
 class PetState:
     species: str = "blob"     # вид питомца — папка в assets/pets
-    stage: str = "egg"        # стадия эволюции, см. evolution.py
+    stage: str = "birth"      # стадия эволюции, см. evolution.py
     age: float = 0.0          # прожито игровых секунд
     care_mistakes: int = 0    # ошибки ухода — решают, каким вырастет взрослый
     dirty_time: float = 0.0   # сколько секунд подряд лежат неубранные кучки
@@ -34,5 +34,7 @@ class PetState:
         known = {f.name for f in fields(cls)}
         data = {k: v for k, v in data.items() if k in known}
         data.setdefault("stage", "adult_normal")  # питомцы до эволюции уже были взрослыми
+        if data["stage"] == "egg":
+            data["stage"] = "birth"  # стадия переименована
         data.setdefault("clock", data.get("updated_at", time.time()))
         return cls(**data)
