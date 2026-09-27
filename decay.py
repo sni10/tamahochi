@@ -51,8 +51,8 @@ def _clamp(value: float) -> float:
     return max(0.0, min(100.0, value))
 
 
-def _step(s: PetState, seconds: float, night: bool) -> None:
-    s.age += seconds
+def _step(s: PetState, seconds: float, night: bool, grow: float = 1.0) -> None:
+    s.age += seconds * grow
     if s.stage == evolution.BIRTH:  # в яйце/корзинке ничего не тратится, только растём
         evolution.grow(s)
         return
@@ -115,8 +115,11 @@ def _step(s: PetState, seconds: float, night: bool) -> None:
         evolution.grow(s)
 
 
-def apply(s: PetState, seconds: float, quiet: Quiet = None) -> None:
-    """Прожить `seconds` секунд игрового времени; игровые часы s.clock идут вместе с ним."""
+def apply(s: PetState, seconds: float, quiet: Quiet = None, grow: float = 1.0) -> None:
+    """Прожить `seconds` секунд игрового времени; игровые часы s.clock идут вместе с ним.
+
+    grow — во сколько раз быстрее идёт взросление (отладка: смотреть эволюцию, не голодая).
+    """
     while seconds > 0 and s.alive:
         chunk = min(STEP, seconds)
         was_night = is_night(s.clock, quiet)
@@ -127,15 +130,15 @@ def apply(s: PetState, seconds: float, quiet: Quiet = None) -> None:
                 s.sleeping = True   # наступила ночь — спать
             elif was_night and not night:
                 s.sleeping = False  # утро — подъём
-        _step(s, chunk, night)
+        _step(s, chunk, night, grow)
         seconds -= chunk
 
 
-def advance(s: PetState, now: float, speed: float = 1.0, quiet: Quiet = None) -> None:
+def advance(s: PetState, now: float, speed: float = 1.0, quiet: Quiet = None, grow: float = 1.0) -> None:
     """Догнать состояние до момента `now` (реальное время, умноженное на speed).
 
     При speed > 1 игровые часы s.clock убегают вперёд реальных — это режим отладки.
     """
     elapsed = max(0.0, now - s.updated_at)  # защита от перевода часов назад
-    apply(s, elapsed * speed, quiet)
+    apply(s, elapsed * speed, quiet, grow)
     s.updated_at = now

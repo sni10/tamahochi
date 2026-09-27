@@ -54,10 +54,15 @@ SAD_THRESHOLD = 25    # ниже — грустная мордочка и миг
 
 
 class Game:
-    def __init__(self, state: PetState | None, speed: float = 1.0, settings: Settings | None = None):
-        """state=None — новая игра, начинаем с выбора питомца."""
+    def __init__(self, state: PetState | None, speed: float = 1.0, settings: Settings | None = None,
+                 grow: float = 1.0):
+        """state=None — новая игра, начинаем с выбора питомца.
+
+        speed ускоряет всё время, grow — только взросление (для отладки эволюции).
+        """
         self.state = state or PetState()
         self.speed = speed
+        self.grow = grow
         self.settings = settings or Settings()
         self.settings_field = 0         # 0 — начало тихих часов, 1 — конец
         self.settings_changed = False   # App сохраняет настройки и сбрасывает флаг
@@ -116,7 +121,7 @@ class Game:
         if self.mode == "select":
             return
         stage_before = self.state.stage
-        decay.advance(self.state, time.time(), self.speed, self.settings.quiet)
+        decay.advance(self.state, time.time(), self.speed, self.settings.quiet, self.grow)
         self.pet_x = min(self.pet_x, self._max_pet_x())
         if not self.state.alive:
             if self.mode != "dead":
@@ -124,15 +129,19 @@ class Game:
                 self.selected = None
             return
         if self.state.stage != stage_before:
-            self.evolved_from = stage_before
-            self.pet_x = self._home_x()
-            self._set_mode("evolve")
+            self.start_evolution(stage_before)
             return
         self.mode_ticks += 1
         if self.mode in ANIM_LENGTH and self.mode_ticks >= ANIM_LENGTH[self.mode]:
             self._set_mode("idle")
         if self.mode == "idle" and not self.state.sleeping and not self._is_birth():
             self._walk()
+
+    def start_evolution(self, from_stage: str) -> None:
+        """Показать анимацию превращения из стадии from_stage в текущую."""
+        self.evolved_from = from_stage
+        self.pet_x = self._home_x()
+        self._set_mode("evolve")
 
     def _set_mode(self, mode: str) -> None:
         self.mode = mode

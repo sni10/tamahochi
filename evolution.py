@@ -38,10 +38,10 @@ def adult_for(mistakes: int) -> str:
 
 
 def grow(s: PetState) -> None:
-    """Перевести питомца на следующую стадию, если он дорос."""
+    """Перевести питомца на ту стадию, до которой он дорос (можно через несколько сразу)."""
     if s.stage == BIRTH and s.age >= BIRTH_UNTIL:
         s.stage = BABY
-    elif s.stage == BABY and s.age >= BABY_UNTIL:
+    if s.stage == BABY and s.age >= BABY_UNTIL:
         s.stage = CHILD
-    elif s.stage == CHILD and s.age >= CHILD_UNTIL:
+    if s.stage == CHILD and s.age >= CHILD_UNTIL:
         s.stage = adult_for(s.care_mistakes)
