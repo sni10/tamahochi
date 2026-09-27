@@ -2,7 +2,8 @@
 
 Управление: A (или ← / Ф) — выбрать иконку, B (Enter / И) — действие, C (Esc / С) — отмена.
 На экране выбора питомца A/C листают, B выбирает. Спрайты — текстовые файлы в assets/.
-Запуск с ускорением времени для отладки: python main.py --speed 60
+Отладка: python main.py --speed 60  — всё время в 60 раз быстрее;
+         python main.py --grow 3600 — только взросление (час за секунду), потребности как обычно.
 """
 
 import argparse
@@ -19,14 +20,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Tamahochi")
     parser.add_argument("--speed", type=float, default=1.0,
                         help="во сколько раз ускорить время (например, 60 — минута за секунду)")
+    parser.add_argument("--grow", type=float, default=1.0,
+                        help="во сколько раз ускорить только взросление (3600 — час за секунду)")
     args = parser.parse_args()
 
+    settings = storage.load_settings()
     state = storage.load()  # None — новая игра, начнём с выбора питомца
+    stage_before = state.stage if state else None
     if state:
-        decay.advance(state, time.time())  # догоняем время, пока программа была закрыта
+        decay.advance(state, time.time(), quiet=settings.quiet)  # догоняем время, пока программа была закрыта
+
+    game = Game(state, speed=args.speed, settings=settings, grow=args.grow)
+    if state and state.alive and state.stage != stage_before:
+        game.start_evolution(stage_before)  # вырос, пока игра была закрыта
 
     root = tk.Tk()
-    App(root, Game(state, speed=args.speed))
+    App(root, game)
     root.mainloop()
 
 

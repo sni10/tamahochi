@@ -11,6 +11,7 @@ import time
 import decay
 import evolution
 import sprites
+from settings import Settings
 from state import PetState
 
 COLS, ROWS = 72, 156
@@ -31,17 +32,17 @@ CLOUD_Y = PLAY_Y + 10           # на высоте солнца, чтобы п�
 
 # Меню
 SEPARATOR_BOTTOM = 132
-ICON_Y, ICON_X, ICON_STEP = 139, 3, 18
+ICON_Y, ICON_X, ICON_STEP = 139, 2, 14
 
 # Экран выбора
 NAME_Y, DOTS_Y = 9, 25
 
-ICONS = (sprites.ICON_FOOD, sprites.ICON_PLAY, sprites.ICON_SLEEP, sprites.ICON_CLEAN)
-FEED, PLAY, SLEEP, CLEAN = range(len(ICONS))
+ICONS = (sprites.ICON_FOOD, sprites.ICON_PLAY, sprites.ICON_SLEEP, sprites.ICON_CLEAN, sprites.ICON_SETTINGS)
+FEED, PLAY, SLEEP, CLEAN, SETTINGS = range(len(ICONS))
 
 # Длительность анимаций в тиках; пока анимация идёт, кнопки игнорируются.
 ANIM_LENGTH = {"eat": 8, "play": 8, "no": 4, "clean": 6, "evolve": 10}
-EGG_CRACK_BEFORE = 60  # за сколько игровых секунд до вылупления яйцо трескается
+WAKE_BEFORE = 60  # за сколько игровых секунд до появления яйцо трескается / корзинка шевелится
 
 FEED_AMOUNT = 15
 FEED_DIGESTION = 25   # еда ускоряет появление кучки
@@ -53,10 +54,18 @@ SAD_THRESHOLD = 25    # ниже — грустная мордочка и миг
 
 
 class Game:
-    def __init__(self, state: PetState | None, speed: float = 1.0):
-        """state=None — новая игра, начинаем с выбора питомца."""
+    def __init__(self, state: PetState | None, speed: float = 1.0, settings: Settings | None = None,
+                 grow: float = 1.0):
+        """state=None — новая игра, начинаем с выбора питомца.
+
+        speed ускоряет всё время, grow — только взросление (для отладки эволюции).
+        """
         self.state = state or PetState()
         self.speed = speed
+        self.grow = grow
+        self.settings = settings or Settings()
+        self.settings_field = 0         # 0 — начало тихих часов, 1 — конец
+        self.settings_changed = False   # App сохраняет настройки и сбрасывает флаг
         self.selected: int | None = None
         self.choice = 0  # какой питомец показан на экране выбора
         self.mode = "idle" if state else "select"
@@ -82,11 +91,15 @@ class Game:
         stage = "adult_normal" if self.mode == "select" else self.state.stage
         return self.skin.look(stage)
 
-    def _is_egg(self) -> bool:
-        return self.mode != "select" and self.state.stage == evolution.EGG
+    def _is_birth(self) -> bool:
+        """Питомец ещё в яйце или корзинке."""
+        return self.mode != "select" and self.state.stage == evolution.BIRTH
+
+    def _birth_sprite(self, waking: bool) -> sprites.Sprite:
+        return sprites.BIRTH[self.skin.birth][1 if waking else 0]
 
     def _pet_w(self) -> int:
-        return sprites.EGG.w if self._is_egg() else self.look.w
+        return self._birth_sprite(False).w if self._is_birth() else self.look.w
 
     @staticmethod
     def _y_for(h: int) -> int:
@@ -108,7 +121,7 @@ class Game:
         if self.mode == "select":
             return
         stage_before = self.state.stage
-        decay.advance(self.state, time.time(), self.speed)
+        decay.advance(self.state, time.time(), self.speed, self.settings.quiet, self.grow)
         self.pet_x = min(self.pet_x, self._max_pet_x())
         if not self.state.alive:
             if self.mode != "dead":
@@ -116,15 +129,19 @@ class Game:
                 self.selected = None
             return
         if self.state.stage != stage_before:
-            self.evolved_from = stage_before
-            self.pet_x = self._home_x()
-            self._set_mode("evolve")
+            self.start_evolution(stage_before)
             return
         self.mode_ticks += 1
         if self.mode in ANIM_LENGTH and self.mode_ticks >= ANIM_LENGTH[self.mode]:
             self._set_mode("idle")
-        if self.mode == "idle" and not self.state.sleeping and not self._is_egg():
+        if self.mode == "idle" and not self.state.sleeping and not self._is_birth():
             self._walk()
+
+    def start_evolution(self, from_stage: str) -> None:
+        """Показать анимацию превращения из стадии from_stage в текущую."""
+        self.evolved_from = from_stage
+        self.pet_x = self._home_x()
+        self._set_mode("evolve")
 
     def _set_mode(self, mode: str) -> None:
         self.mode = mode
@@ -158,6 +175,9 @@ class Game:
         if self.mode == "select":
             self.choice = (self.choice - 1) % len(sprites.PETS)
             return
+        if self.mode == "settings":
+            self.settings_field = 1 - self.settings_field
+            return
         if self.mode == "dead" or self._busy():
             return
         self.selected = 0 if self.selected is None else (self.selected + 1) % len(ICONS)
@@ -175,8 +195,22 @@ class Game:
             self.selected = None
             self._set_mode("select")
             return
-        if self._busy() or self.selected is None or self._is_egg():
-            return  # яйцу ничего не нужно
+        if self.mode == "settings":
+            st = self.settings
+            if self.settings_field == 0:
+                st.quiet_start = (st.quiet_start + 1) % 24
+            else:
+                st.quiet_end = (st.quiet_end + 1) % 24
+            self.settings_changed = True
+            return
+        if self._busy() or self.selected is None:
+            return
+        if self.selected == SETTINGS:
+            self.settings_field = 0
+            self._set_mode("settings")
+            return
+        if self._is_birth():
+            return  # в яйце/корзинке ничего не нужно
         s = self.state
         if self.selected == SLEEP:
             s.sleeping = not s.sleeping
@@ -211,6 +245,9 @@ class Game:
         if self.mode == "select":
             self.choice = (self.choice + 1) % len(sprites.PETS)
             return
+        if self.mode == "settings":
+            self._set_mode("idle")
+            return
         if self.mode == "dead" or self._busy():
             return
         self.selected = None
@@ -220,8 +257,12 @@ class Game:
     def render(self, lcd) -> None:
         lcd.clear()
         self._dotted(lcd, SEPARATOR_TOP)
-        self._draw_room(lcd)
         self._dotted(lcd, SEPARATOR_BOTTOM)
+        if self.mode == "settings":
+            self._draw_settings(lcd)
+            lcd.flush()
+            return
+        self._draw_room(lcd)
         if self.mode == "select":
             self._draw_select(lcd)
             lcd.flush()
@@ -293,8 +334,8 @@ class Game:
 
     def _draw_pet(self, lcd, x: int) -> None:
         s = self.state
-        if self._is_egg():
-            self._draw_egg(lcd)
+        if self._is_birth():
+            self._draw_birth(lcd)
             return
         look = self.look
         y = self._y_for(look.h)
@@ -309,11 +350,11 @@ class Game:
         frames = look.sad if sad else look.idle
         lcd.blit(frames[self.frame % 2], x, y, flip=self.pet_dir < 0)
 
-    def _draw_egg(self, lcd) -> None:
-        cracking = self.state.age >= evolution.EGG_UNTIL - EGG_CRACK_BEFORE
-        wobble = (0, 1, 0, -1)[self.frame % 4] if cracking or self.frame % 8 < 4 else 0
-        egg = sprites.EGG_CRACK if cracking else sprites.EGG
-        lcd.blit(egg, self._home_x() + wobble, self._y_for(egg.h))
+    def _draw_birth(self, lcd) -> None:
+        waking = self.state.age >= evolution.BIRTH_UNTIL - WAKE_BEFORE
+        wobble = (0, 1, 0, -1)[self.frame % 4] if waking or self.frame % 8 < 4 else 0
+        sprite = self._birth_sprite(waking)
+        lcd.blit(sprite, self._home_x() + wobble, self._y_for(sprite.h))
 
     def _draw_idle(self, lcd) -> None:
         x = self._home_x() if self.state.sleeping else self.pet_x
@@ -324,8 +365,8 @@ class Game:
         show_old = self.mode_ticks < ANIM_LENGTH["evolve"] - 4 and self.frame % 2
         if not show_old:
             sprite = self.look.happy
-        elif self.evolved_from == evolution.EGG:
-            sprite = sprites.EGG_CRACK
+        elif self.evolved_from == evolution.BIRTH:
+            sprite = self._birth_sprite(True)
         else:
             sprite = self.skin.look(self.evolved_from).idle[0]
         lcd.blit(sprite, self._center_for(sprite.w), self._y_for(sprite.h))
@@ -406,3 +447,20 @@ class Game:
             if glyph:
                 lcd.blit(glyph, x, y, scale=scale)
             x += ((glyph.w if glyph else 3) + 1) * scale
+
+    # --- экран настроек ---
+
+    def _draw_settings(self, lcd) -> None:
+        st = self.settings
+        self._draw_text(lcd, "SETTINGS", 15)
+        self._draw_text(lcd, "QUIET HOURS", 45)
+        rows = (("FROM", st.quiet_start, 60), ("TO", st.quiet_end, 82))
+        for i, (label, hour, y) in enumerate(rows):
+            if i == self.settings_field:
+                lcd.blit(sprites.ARROW_RIGHT, 2, y + 3)
+            self._draw_text(lcd, label, y + 3, x=8)
+            self._draw_text(lcd, f"{hour:02d}:00", y, x=30, scale=2)
+        now = time.localtime(self.state.clock)
+        self._draw_text(lcd, f"NOW {now.tm_hour:02d}:{now.tm_min:02d}", 112)
+        self._draw_text(lcd, "A NEXT  B +1", ICON_Y)
+        self._draw_text(lcd, "C BACK", ICON_Y + 9)

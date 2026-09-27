@@ -9,4 +9,5 @@ __pycache__/
 
 # Личное сохранение игры
 save.json
-save.tmp
+*.tmp
+settings.json

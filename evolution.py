@@ -1,6 +1,6 @@
 """Эволюция: стадии роста и выбор взрослого облика по качеству ухода.
 
-EGG ──► BABY ──► CHILD ──► ADULT_GOOD / ADULT_NORMAL / ADULT_BAD
+BIRTH ──► BABY ──► CHILD ──► ADULT_GOOD / ADULT_NORMAL / ADULT_BAD
 
 Возраст считается в игровом времени (state.age), поэтому работает и офлайн, и с --speed.
 """
@@ -9,12 +9,12 @@ from state import PetState
 
 MINUTE, HOUR = 60.0, 3600.0
 
-EGG, BABY, CHILD = "egg", "baby", "child"
+BIRTH, BABY, CHILD = "birth", "baby", "child"  # birth — в яйце или корзинке
 ADULT_GOOD, ADULT_NORMAL, ADULT_BAD = "adult_good", "adult_normal", "adult_bad"
 ADULTS = (ADULT_GOOD, ADULT_NORMAL, ADULT_BAD)
 
 # До какого возраста длится стадия.
-EGG_UNTIL = 5 * MINUTE
+BIRTH_UNTIL = 5 * MINUTE
 BABY_UNTIL = 24 * HOUR
 CHILD_UNTIL = 72 * HOUR
 
@@ -38,10 +38,10 @@ def adult_for(mistakes: int) -> str:
 
 
 def grow(s: PetState) -> None:
-    """Перевести питомца на следующую стадию, если он дорос."""
-    if s.stage == EGG and s.age >= EGG_UNTIL:
+    """Перевести питомца на ту стадию, до которой он дорос (можно через несколько сразу)."""
+    if s.stage == BIRTH and s.age >= BIRTH_UNTIL:
         s.stage = BABY
-    elif s.stage == BABY and s.age >= BABY_UNTIL:
+    if s.stage == BABY and s.age >= BABY_UNTIL:
         s.stage = CHILD
-    elif s.stage == CHILD and s.age >= CHILD_UNTIL:
+    if s.stage == CHILD and s.age >= CHILD_UNTIL:
         s.stage = adult_for(s.care_mistakes)

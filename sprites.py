@@ -119,6 +119,9 @@ class PetSkin:
         self.key = folder.name
         self.name = meta.get("name", self.key.upper())
         self.order = int(meta.get("order", 99))
+        self.birth = meta.get("birth", "basket")
+        if self.birth not in BIRTH:
+            raise SpriteError(f"pets/{self.key}/pet.txt: birth должен быть одним из {sorted(BIRTH)}")
         self.looks = {st: Look(folder / f"{st}.txt") for st in STAGE_FALLBACK if (folder / f"{st}.txt").exists()}
         if "adult_normal" not in self.looks:
             raise SpriteError(f"pets/{self.key}: обязателен файл adult_normal.txt")
@@ -141,12 +144,18 @@ def _load_pets() -> dict[str, PetSkin]:
 _, _ui = load_sheet(ASSETS / "ui.txt")
 _, _world = load_sheet(ASSETS / "world.txt")
 _, FONT = load_sheet(ASSETS / "font.txt")
+# Откуда появляется питомец: (обычный кадр, кадр «вот-вот появится»).
+BIRTH = {
+    "egg": (_require(_world, "egg", "world.txt"), _require(_world, "egg_crack", "world.txt")),
+    "basket": (_require(_world, "basket", "world.txt"), _require(_world, "basket_wake", "world.txt")),
+}
 PETS = _load_pets()
 
 ICON_FOOD = _require(_ui, "icon_food", "ui.txt")
 ICON_PLAY = _require(_ui, "icon_play", "ui.txt")
 ICON_SLEEP = _require(_ui, "icon_sleep", "ui.txt")
 ICON_CLEAN = _require(_ui, "icon_clean", "ui.txt")
+ICON_SETTINGS = _require(_ui, "icon_settings", "ui.txt")
 ICON_SIZE = ICON_FOOD.w
 MINI_SATIETY = _require(_ui, "mini_satiety", "ui.txt")
 MINI_HAPPINESS = _require(_ui, "mini_happiness", "ui.txt")
@@ -165,5 +174,3 @@ WAVE = _require(_world, "wave", "world.txt")
 Z_BIG = _require(_world, "z_big", "world.txt")
 Z_SMALL = _require(_world, "z_small", "world.txt")
 GHOST = _require(_world, "ghost", "world.txt")
-EGG = _require(_world, "egg", "world.txt")
-EGG_CRACK = _require(_world, "egg_crack", "world.txt")

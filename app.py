@@ -76,6 +76,9 @@ class App:
 
     def _press(self, action) -> None:
         action()
+        if self.game.settings_changed:
+            storage.save_settings(self.game.settings)
+            self.game.settings_changed = False
         self.game.render(self.lcd)
 
     def _loop(self) -> None:
@@ -84,6 +87,7 @@ class App:
         self.root.after(TICK_MS, self._loop)
 
     def _save(self) -> None:
+        storage.save_settings(self.game.settings)
         if self.game.savable:
             storage.save(self.game.state)
 
