@@ -21,12 +21,13 @@ def main() -> None:
                         help="во сколько раз ускорить время (например, 60 — минута за секунду)")
     args = parser.parse_args()
 
+    settings = storage.load_settings()
     state = storage.load()  # None — новая игра, начнём с выбора питомца
     if state:
-        decay.advance(state, time.time())  # догоняем время, пока программа была закрыта
+        decay.advance(state, time.time(), quiet=settings.quiet)  # догоняем время, пока программа была закрыта
 
     root = tk.Tk()
-    App(root, Game(state, speed=args.speed))
+    App(root, Game(state, speed=args.speed, settings=settings))
     root.mainloop()
 
 

@@ -11,6 +11,7 @@ import time
 import decay
 import evolution
 import sprites
+from settings import Settings
 from state import PetState
 
 COLS, ROWS = 72, 156
@@ -31,13 +32,13 @@ CLOUD_Y = PLAY_Y + 10           # на высоте солнца, чтобы п�
 
 # Меню
 SEPARATOR_BOTTOM = 132
-ICON_Y, ICON_X, ICON_STEP = 139, 3, 18
+ICON_Y, ICON_X, ICON_STEP = 139, 2, 14
 
 # Экран выбора
 NAME_Y, DOTS_Y = 9, 25
 
-ICONS = (sprites.ICON_FOOD, sprites.ICON_PLAY, sprites.ICON_SLEEP, sprites.ICON_CLEAN)
-FEED, PLAY, SLEEP, CLEAN = range(len(ICONS))
+ICONS = (sprites.ICON_FOOD, sprites.ICON_PLAY, sprites.ICON_SLEEP, sprites.ICON_CLEAN, sprites.ICON_SETTINGS)
+FEED, PLAY, SLEEP, CLEAN, SETTINGS = range(len(ICONS))
 
 # Длительность анимаций в тиках; пока анимация идёт, кнопки игнорируются.
 ANIM_LENGTH = {"eat": 8, "play": 8, "no": 4, "clean": 6, "evolve": 10}
@@ -53,10 +54,13 @@ SAD_THRESHOLD = 25    # ниже — грустная мордочка и миг
 
 
 class Game:
-    def __init__(self, state: PetState | None, speed: float = 1.0):
+    def __init__(self, state: PetState | None, speed: float = 1.0, settings: Settings | None = None):
         """state=None — новая игра, начинаем с выбора питомца."""
         self.state = state or PetState()
         self.speed = speed
+        self.settings = settings or Settings()
+        self.settings_field = 0         # 0 — начало тихих часов, 1 — конец
+        self.settings_changed = False   # App сохраняет настройки и сбрасывает флаг
         self.selected: int | None = None
         self.choice = 0  # какой питомец показан на экране выбора
         self.mode = "idle" if state else "select"
@@ -108,7 +112,7 @@ class Game:
         if self.mode == "select":
             return
         stage_before = self.state.stage
-        decay.advance(self.state, time.time(), self.speed)
+        decay.advance(self.state, time.time(), self.speed, self.settings.quiet)
         self.pet_x = min(self.pet_x, self._max_pet_x())
         if not self.state.alive:
             if self.mode != "dead":
@@ -158,6 +162,9 @@ class Game:
         if self.mode == "select":
             self.choice = (self.choice - 1) % len(sprites.PETS)
             return
+        if self.mode == "settings":
+            self.settings_field = 1 - self.settings_field
+            return
         if self.mode == "dead" or self._busy():
             return
         self.selected = 0 if self.selected is None else (self.selected + 1) % len(ICONS)
@@ -175,7 +182,21 @@ class Game:
             self.selected = None
             self._set_mode("select")
             return
-        if self._busy() or self.selected is None or self._is_egg():
+        if self.mode == "settings":
+            st = self.settings
+            if self.settings_field == 0:
+                st.quiet_start = (st.quiet_start + 1) % 24
+            else:
+                st.quiet_end = (st.quiet_end + 1) % 24
+            self.settings_changed = True
+            return
+        if self._busy() or self.selected is None:
+            return
+        if self.selected == SETTINGS:
+            self.settings_field = 0
+            self._set_mode("settings")
+            return
+        if self._is_egg():
             return  # яйцу ничего не нужно
         s = self.state
         if self.selected == SLEEP:
@@ -211,6 +232,9 @@ class Game:
         if self.mode == "select":
             self.choice = (self.choice + 1) % len(sprites.PETS)
             return
+        if self.mode == "settings":
+            self._set_mode("idle")
+            return
         if self.mode == "dead" or self._busy():
             return
         self.selected = None
@@ -220,8 +244,12 @@ class Game:
     def render(self, lcd) -> None:
         lcd.clear()
         self._dotted(lcd, SEPARATOR_TOP)
-        self._draw_room(lcd)
         self._dotted(lcd, SEPARATOR_BOTTOM)
+        if self.mode == "settings":
+            self._draw_settings(lcd)
+            lcd.flush()
+            return
+        self._draw_room(lcd)
         if self.mode == "select":
             self._draw_select(lcd)
             lcd.flush()
@@ -406,3 +434,20 @@ class Game:
             if glyph:
                 lcd.blit(glyph, x, y, scale=scale)
             x += ((glyph.w if glyph else 3) + 1) * scale
+
+    # --- экран настроек ---
+
+    def _draw_settings(self, lcd) -> None:
+        st = self.settings
+        self._draw_text(lcd, "SETTINGS", 15)
+        self._draw_text(lcd, "QUIET HOURS", 45)
+        rows = (("FROM", st.quiet_start, 60), ("TO", st.quiet_end, 82))
+        for i, (label, hour, y) in enumerate(rows):
+            if i == self.settings_field:
+                lcd.blit(sprites.ARROW_RIGHT, 2, y + 3)
+            self._draw_text(lcd, label, y + 3, x=8)
+            self._draw_text(lcd, f"{hour:02d}:00", y, x=30, scale=2)
+        now = time.localtime(self.state.clock)
+        self._draw_text(lcd, f"NOW {now.tm_hour:02d}:{now.tm_min:02d}", 112)
+        self._draw_text(lcd, "A NEXT  B +1", ICON_Y)
+        self._draw_text(lcd, "C BACK", ICON_Y + 9)

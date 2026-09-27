@@ -147,6 +147,7 @@ ICON_FOOD = _require(_ui, "icon_food", "ui.txt")
 ICON_PLAY = _require(_ui, "icon_play", "ui.txt")
 ICON_SLEEP = _require(_ui, "icon_sleep", "ui.txt")
 ICON_CLEAN = _require(_ui, "icon_clean", "ui.txt")
+ICON_SETTINGS = _require(_ui, "icon_settings", "ui.txt")
 ICON_SIZE = ICON_FOOD.w
 MINI_SATIETY = _require(_ui, "mini_satiety", "ui.txt")
 MINI_HAPPINESS = _require(_ui, "mini_happiness", "ui.txt")

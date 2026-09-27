@@ -22,6 +22,7 @@ class PetState:
     alive: bool = True
     born_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)  # момент последнего пересчёта деградации
+    clock: float = field(default_factory=time.time)       # игровые часы (с --speed идут быстрее)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -33,4 +34,5 @@ class PetState:
         known = {f.name for f in fields(cls)}
         data = {k: v for k, v in data.items() if k in known}
         data.setdefault("stage", "adult_normal")  # питомцы до эволюции уже были взрослыми
+        data.setdefault("clock", data.get("updated_at", time.time()))
         return cls(**data)
