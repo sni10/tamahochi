@@ -33,6 +33,7 @@ func _initialize() -> void:
 	test_rain_sky()
 	test_umbrella()
 	test_umbrella_screens()
+	test_notifications()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -326,7 +327,7 @@ func test_calls() -> void:
 	var s := _pet_at(_local(12))
 	s.satiety = 20
 	s.poops = 1
-	check(Calls.reasons(s) == ["poop", "hungry"], "поводы: сытость 20 + кучка")
+	check(Calls.reasons(s) == ["hungry", "poop"], "поводы: сытость 20 + кучка (главный — голод)")
 
 	var now := _local(12)
 	s = _pet_at(now)
@@ -665,3 +666,44 @@ func test_umbrella_screens() -> void:
 	check(Shop.grant(p, Shop.SYRINGE_PACK) and p.umbrellas == 6, "syringe_pack: +5 зонтиков")
 	check(Shop.grant(p, Shop.PREMIUM) and p.umbrellas == 16, "premium: +10 зонтиков")
 	check(not Shop.grant(p, Shop.PREMIUM) and p.umbrellas == 16, "повторный premium — без зонтиков")
+
+
+# --- уведомления (зов игрока) ---
+
+func test_notifications() -> void:
+	check(Calls.text(["poop"], "CAT") == "Time to clean up!", "текст: кучка")
+	check(Calls.text(["hungry"], "CAT") == "CAT is hungry!", "текст: голод")
+	check(Calls.text(["sick", "hungry", "poop"], "CAT") == "CAT is sick! (+2)", "текст: несколько поводов")
+	check(Calls.text(["dead"], "CAT") == "CAT has passed away", "текст: смерть")
+
+	var now := _local(12)
+	var n := Calls.plan(_pet_at(now), [], now, null, "CAT")
+	check(absf(n.at - now - 5 * HOUR) <= 60 and n.title == "CAT" and n.body == "Time to clean up!", "сытый днём → ~5 ч, кучка: %s" % [n])
+	var s := _pet_at(now)
+	s.satiety = 10
+	n = Calls.plan(s, [], now, null, "CAT")
+	check(n.at == now + Calls.REMIND_AFTER and n.body == "CAT is hungry!", "повод уже есть → через 15 мин")
+	now = _local(23)
+	s = _pet_at(now)
+	s.digestion = 40  # не спит: кучка к 02:00
+	n = Calls.plan(s, [22, 8], now, null, "CAT")
+	check(absf(n.at - _local(32)) <= 60 and n.body.begins_with("Time to clean up!"), "повод ночью → 08:00: %s" % [n])
+	s = _pet_at(now)
+	s.alive = false
+	check(Calls.plan(s, [], now, null, "CAT").is_empty(), "мёртвый — не планируем")
+
+	s = _pet_at(_local(12))
+	s.pending_call_at = _local(12)
+	Calls.punish_ignored(s, [22, 8], _local(13))
+	check(s.care_mistakes == 1 and s.pending_call_at == 0.0, "проигнорировал зов → +1 ошибка")
+	Calls.punish_ignored(s, [22, 8], _local(13))
+	check(s.care_mistakes == 1, "повторный возврат — без второго штрафа")
+	s = _pet_at(_local(12))
+	s.pending_call_at = _local(12)
+	Calls.punish_ignored(s, [22, 8], _local(12) + 10 * 60)
+	check(s.care_mistakes == 0, "успел за 15 мин — штрафа нет")
+	s = _pet_at(_local(23))
+	s.pending_call_at = _local(23)
+	Calls.punish_ignored(s, [22, 8], _local(25))
+	check(s.care_mistakes == 0, "зов в тихие часы — штрафа нет")
+	check(PetState.from_dict({"stage": "adult_normal"}).pending_call_at == 0.0, "старый save.json → зова нет")

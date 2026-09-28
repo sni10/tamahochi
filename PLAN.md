@@ -146,6 +146,11 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
 
 Простое уведомление о событии в игре: «CAT is hungry!», «Time to clean up!».
 
+- ✅ Логика готова (change `call-notifications`): план при уходе — `Calls.plan` (повод уже есть →
+  через 15 мин), текст — `Calls.text`, штраф за проигнорированный зов — `Calls.punish_ignored`,
+  доставка — `scripts/notifier.gd` (на ПК — строка в лог). Осталось: Kotlin-плагин доставки на Android
+  (синглтон `TamahochiNotify`: `schedule(at, title, body)`, `cancel()`), разрешение Android 13+.
+
 - Локальные уведомления без сервера: при сворачивании приложения по `next_need_time()`
   (A.4) планируется ближайшее уведомление.
 - **Тихие часы**: в это время уведомления не приходят; поводы копятся и приходят одним
