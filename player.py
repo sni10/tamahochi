@@ -2,12 +2,14 @@
 
 """
 
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 
 
 @dataclass
 class Profile:
-    syringes: int = 0  # шприцы: за рекламу или покупку
+    syringes: int = 0                                     # шприцы: за рекламу или покупку
+    owned_pets: list[str] = field(default_factory=list)   # купленные по одному виды
+    premium: bool = False                                 # Premium: открыты все виды
 
     def to_dict(self) -> dict:
         return asdict(self)

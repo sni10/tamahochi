@@ -120,6 +120,7 @@ class PetSkin:
         self.name = meta.get("name", self.key.upper())
         self.order = int(meta.get("order", 99))
         self.birth = meta.get("birth", "basket")
+        self.free = meta.get("free", "no").lower() == "yes"  # иначе — покупка или Premium
         if self.birth not in BIRTH:
             raise SpriteError(f"pets/{self.key}/pet.txt: birth должен быть одним из {sorted(BIRTH)}")
         self.looks = {st: Look(folder / f"{st}.txt") for st in STAGE_FALLBACK if (folder / f"{st}.txt").exists()}
@@ -161,6 +162,7 @@ ITEM_PILL = _require(_ui, "item_pill", "ui.txt")
 ITEM_SYRINGE = _require(_ui, "item_syringe", "ui.txt")
 MINI_FEVER = _require(_ui, "mini_fever", "ui.txt")
 SICK = _require(_ui, "sick", "ui.txt")
+LOCK = _require(_ui, "lock", "ui.txt")
 ICON_SIZE = ICON_FOOD.w
 MINI_SATIETY = _require(_ui, "mini_satiety", "ui.txt")
 MINI_HAPPINESS = _require(_ui, "mini_happiness", "ui.txt")

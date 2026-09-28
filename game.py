@@ -10,6 +10,7 @@ import time
 
 import decay
 import evolution
+import shop
 import sprites
 from player import Profile
 from settings import Settings
@@ -198,6 +199,8 @@ class Game:
     def press_b(self) -> None:
         """Подтверждение выбранного действия."""
         if self.mode == "select":
+            if not shop.is_unlocked(self.profile, self.skin):
+                return  # закрыт: сначала купить
             self.state = PetState(species=self.skin.key)
             self.pet_x = self._home_x()
             self._set_mode("idle")
@@ -485,6 +488,11 @@ class Game:
         look = self.look
         pet_y = self._y_for(look.h)
         lcd.blit(look.idle[self.frame % 2], self._center_for(look.w), pet_y)
+        unlocked = shop.is_unlocked(self.profile, skin)
+        if not unlocked:
+            lock = sprites.LOCK
+            lcd.blit(lock, self._center_for(lock.w), pet_y - lock.h - 6)
+            self._draw_text(lcd, "LOCKED", pet_y - lock.h - 16)
         arrow_y = pet_y + (look.h - sprites.ARROW_LEFT.h) // 2
         lcd.blit(sprites.ARROW_LEFT, 4, arrow_y)
         lcd.blit(sprites.ARROW_RIGHT, COLS - 4 - sprites.ARROW_RIGHT.w, arrow_y)
@@ -492,7 +500,8 @@ class Game:
         hint_y = ICON_Y + 3
         self._draw_text(lcd, "A", hint_y, x=ICON_X + 2)
         lcd.blit(sprites.ARROW_LEFT, ICON_X + 8, hint_y)
-        self._draw_text(lcd, "B", hint_y)
+        if unlocked:
+            self._draw_text(lcd, "B", hint_y)
         lcd.blit(sprites.ARROW_RIGHT, COLS - ICON_X - 12, hint_y)
         self._draw_text(lcd, "C", hint_y, x=COLS - ICON_X - 6)
 
