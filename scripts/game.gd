@@ -21,6 +21,8 @@ const POOP_SLOT := 11               # кучки выстраиваются сп
 const SUN_X := 47
 const SUN_Y := PLAY_Y + 2
 const CLOUD_Y := PLAY_Y + 10        # на высоте солнца, чтобы проплывать перед ним
+const RAIN_CLOUD_Y := PLAY_Y + 3  # ниже — широкая часть тучи ушла бы на надпись AGE 999
+const RAIN_BOTTOM := GROUND - Sprites.PET_MAX - 2  # капли не долетают до питомца
 
 # Меню
 const SEPARATOR_BOTTOM := 132
@@ -397,11 +399,27 @@ func _draw_status(lcd: Lcd) -> void:
 
 func _draw_room(lcd: Lcd) -> void:
 	_dotted(lcd, GROUND + 1)
+	if Weather.is_rain(state.clock):
+		_draw_rain(lcd)
+		return
 	lcd.blit(Sprites.SUN[frame / 2 % 2], SUN_X, SUN_Y)
 	var span := COLS + Sprites.CLOUD.w
 	var cloud_x := (frame / 2) % span - Sprites.CLOUD.w
 	lcd.erase(Sprites.CLOUD_MASK, cloud_x, CLOUD_Y)
 	lcd.blit(Sprites.CLOUD, cloud_x, CLOUD_Y)
+
+
+## Туча у правого края (левее — надпись возраста), капли — под тучей и выше питомца,
+## чтобы не сливаться с ним (пиксели на ЖК складываются).
+func _draw_rain(lcd: Lcd) -> void:
+	var cloud := Sprites.RAIN_CLOUD
+	var cloud_x := COLS - cloud.w - 1
+	lcd.blit(cloud, cloud_x, RAIN_CLOUD_Y)
+	var drop: Sprites.Sprite = Sprites.RAIN[frame % 2]
+	var rain_area := Rect2i(cloud_x, 0, cloud.w, RAIN_BOTTOM)
+	for y in range(RAIN_CLOUD_Y + cloud.h, RAIN_BOTTOM, drop.h):
+		for x in range(cloud_x + 2, cloud_x + cloud.w, drop.w):
+			lcd.blit(drop, x, y, false, rain_area)
 
 
 func _draw_menu(lcd: Lcd) -> void:

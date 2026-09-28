@@ -23,4 +23,4 @@
 
 ### Requirement: Паритет с прототипом
 **Reason**: Python-прототип устарел, правила теперь развиваются только в Godot (болезнь, сумка, погода уже расходятся).
-**Migration**: Правила симуляции проверяются юнит-тестами в `godot/tests/run_tests.gd`; эталон `parity_expected.json` и `make_parity.py` удаляются.
+**Migration**: Правила симуляции проверяются юнит-тестами в `tests/run_tests.gd`; эталон `parity_expected.json` и `make_parity.py` удаляются.

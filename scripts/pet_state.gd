@@ -4,7 +4,7 @@ class_name PetState extends RefCounted
 const FIELDS := [
 	"species", "stage", "age", "care_mistakes", "dirty_time", "satiety", "happiness", "energy",
 	"health", "sick", "fever", "pills_day", "pills_used", "digestion", "poops", "sleeping", "alive",
-	"born_at", "updated_at", "clock",
+	"born_at", "updated_at", "clock", "rain_loss",
 ]
 
 var species := "blob"      # вид питомца — папка в assets/pets
@@ -28,6 +28,7 @@ var alive := true
 var born_at := Time.get_unix_time_from_system()
 var updated_at := Time.get_unix_time_from_system()  # момент последнего пересчёта деградации
 var clock := Time.get_unix_time_from_system()       # игровые часы (с --speed идут быстрее)
+var rain_loss := 0.0     # сколько счастья добавочно отнял текущий дождь (лимит — Decay.RAIN_JOY_MAX)
 
 
 func _init(p_species := "blob") -> void:

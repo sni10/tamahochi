@@ -49,6 +49,8 @@ static var WAVE: Sprite
 static var Z_BIG: Sprite
 static var Z_SMALL: Sprite
 static var GHOST: Sprite
+static var RAIN_CLOUD: Sprite
+static var RAIN: Array  # два кадра плитки капель
 
 
 class Sprite:
@@ -301,3 +303,5 @@ static func _static_init() -> void:
 	Z_BIG = _require(world, "z_big", "world.txt")
 	Z_SMALL = _require(world, "z_small", "world.txt")
 	GHOST = _require(world, "ghost", "world.txt")
+	RAIN_CLOUD = _require(world, "rain_cloud", "world.txt")
+	RAIN = [_require(world, "rain1", "world.txt"), _require(world, "rain2", "world.txt")]

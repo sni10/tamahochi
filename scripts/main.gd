@@ -1,6 +1,6 @@
 extends Control
 ## Корпус: экран, три кнопки, клавиатура, игровой цикл и автосохранение (≙ app.py + main.py).
-## Отладка: godot --path godot -- --speed 60 | --grow 3600;
+## Отладка: godot --path . -- --speed 60 | --grow 3600;
 ## «покупки» (только debug): 1/G/П — ролик = шприц, 2 — пачка, 3 — Premium, 4 — показанный питомец.
 
 const SHELL := Color("#f2b8c6")

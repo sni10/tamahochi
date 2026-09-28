@@ -22,6 +22,7 @@ const HEALING_THRESHOLD := 50.0
 const DIGESTION_RATE := 20.0
 const MAX_POOPS := 3
 const POOP_SADNESS := 3.0
+const RAIN_JOY_MAX := 15.0  # в дождь счастье тратится вдвое быстрее, но добавка за один дождь — не больше этого
 
 const FEVER_RISE := ENERGY_ASLEEP / 3  # от 0 до смерти ~12 ч
 const DEADLY_FEVER := 100.0
@@ -74,6 +75,15 @@ static func _step(s: PetState, seconds: float, night: bool, grow := 1.0) -> void
 		s.satiety = _clamp(s.satiety + SATIETY_AWAKE * hunger * h)
 		s.happiness = _clamp(s.happiness + HAPPINESS_AWAKE * h)
 		s.energy = _clamp(s.energy + ENERGY_AWAKE * h)
+
+	if Weather.is_rain(s.clock):
+		if not deep:  # в ночном сне счастье не тратится — и дождь не отнимает
+			var joy_rate := HAPPINESS_ASLEEP if s.sleeping else HAPPINESS_AWAKE
+			var extra := minf(-joy_rate * h, RAIN_JOY_MAX - s.rain_loss)
+			s.happiness = _clamp(s.happiness - extra)
+			s.rain_loss += extra
+	else:
+		s.rain_loss = 0.0
 
 	if not deep:  # ночью пищеварение и кучки «замирают»
 		s.digestion += DIGESTION_RATE * Evolution.DIGESTION_FACTOR.get(s.stage, 1.0) * h

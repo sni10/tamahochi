@@ -1,6 +1,6 @@
 extends SceneTree
-## Проверки Godot-порта. Запуск: godot --headless --path godot -s res://tests/run_tests.gd
-## Код выхода 1 — что-то упало. Ассеты: если копия разошлась, скопируйте assets/ в godot/assets/.
+## Проверки Godot-порта. Запуск: godot --headless --path . -s res://tests/run_tests.gd
+## Код выхода 1 — что-то упало.
 
 const HOUR := 3600.0
 var failed := 0
@@ -16,44 +16,23 @@ func check(cond: bool, what: String) -> void:
 
 
 func _initialize() -> void:
+	Weather.enabled = false  # точные числа в старых тестах; погоду тестируют test_weather/test_rain
 	check(Sprites.error.is_empty(), "ассеты загружены: " + Sprites.error)
-	test_assets_match_root()
 	test_sprite_loader()
 	test_lcd()
 	test_pet_state()
 	test_evolution()
 	test_decay()
-	test_parity()
 	test_game()
 	test_storage()
 	test_shop()
 	test_calls()
 	test_age()
+	test_weather()
+	test_rain()
+	test_rain_sky()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
-
-
-# --- ассеты ---
-
-func _files(dir: String, prefix := "") -> PackedStringArray:
-	var out := PackedStringArray()
-	for f in DirAccess.get_files_at(dir):
-		out.append(prefix + f)
-	for d in DirAccess.get_directories_at(dir):
-		out.append_array(_files(dir + "/" + d, prefix + d + "/"))
-	return out
-
-
-func test_assets_match_root() -> void:
-	var root := ProjectSettings.globalize_path("res://").path_join("../assets").simplify_path()
-	var ours := _files("res://assets")
-	var theirs := _files(root)
-	ours.sort()
-	theirs.sort()
-	check(ours == theirs, "список файлов godot/assets совпадает с assets/")
-	for f in ours:
-		check(FileAccess.get_file_as_bytes("res://assets/" + f) == FileAccess.get_file_as_bytes(root + "/" + f),
-				"godot/assets/%s совпадает с assets/%s" % [f, f])
 
 
 func test_sprite_loader() -> void:
@@ -169,22 +148,6 @@ func test_decay() -> void:
 	Decay.advance(s, 500.0)
 	check(s.satiety == 100.0 and s.updated_at == 500.0, "часы назад — без изменений")
 	check(not Decay.is_night(0.0, [8, 8]) and not Decay.is_night(0.0, []), "start == end — ночи нет")
-
-
-func test_parity() -> void:
-	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/parity_expected.json"))
-	var bias := Decay.tz_bias
-	for name in data:
-		var sc: Dictionary = data[name]
-		Decay.tz_bias = int(sc.tz_bias)
-		var s := PetState.from_dict(sc.start)
-		Decay.apply(s, sc.seconds, sc.quiet, sc.grow)
-		var got := s.to_dict()
-		for f in sc.expected:
-			var want: Variant = sc.expected[f]
-			var ok: bool = absf(float(got[f]) - float(want)) < 1e-6 if typeof(want) == TYPE_FLOAT else got[f] == want
-			check(ok, "паритет %s.%s: godot %s, python %s" % [name, f, got[f], want])
-	Decay.tz_bias = bias
 
 
 # --- игра ---
@@ -435,3 +398,140 @@ func test_age() -> void:
 	check(_corner(lcd) == _corner(clean), "после смерти возраста нет")
 	lcd.free()
 	clean.free()
+
+
+# --- погода ---
+
+func test_weather() -> void:
+	Weather.enabled = true
+	check(Weather.rains(2026, 1, 15) == Weather.rains(2026, 1, 15), "одна дата — одно расписание")
+	var ok := true
+	var schedules := {}
+	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
+	for i in 1000:
+		var d := Time.get_datetime_dict_from_unix_time(day + i * 86400)
+		var rs := Weather.rains(d.year, d.month, d.day)
+		schedules[str(rs)] = true
+		ok = ok and rs.size() in [1, 2]
+		var prev_end := 0
+		for r in rs:
+			var window: int = 6 if r[0] < 14 else 14
+			ok = ok and r[1] >= 1 and r[1] <= 3 and r[0] - window <= 5 and r[0] >= prev_end and r[0] + r[1] <= 22
+			prev_end = r[0] + r[1]
+	check(ok, "1000 дат: 1–2 дождя, 1–3 ч, старт в окне, без пересечений, до 22:00")
+	check(schedules.size() > 50, "разные даты — разные расписания: %d вариантов" % schedules.size())
+	var r: Array = Weather.rains(2026, 1, 15)[0]
+	check(Weather.is_rain(_local(r[0] + 0.5)) and not Weather.is_rain(_local(r[0] + r[1] + 0.01)), "is_rain внутри и после дождя")
+	check(not Weather.is_rain(_local(3)), "ночью дождя нет")
+	Weather.enabled = false
+	check(not Weather.is_rain(_local(r[0] + 0.5)), "выключатель")
+
+
+# --- дождь и счастье ---
+
+func _at(d: Dictionary, hours: float) -> float:
+	return Time.get_unix_time_from_datetime_dict({"year": d.year, "month": d.month, "day": d.day,
+			"hour": 0, "minute": 0, "second": 0}) - Decay.tz_bias * 60 + hours * HOUR
+
+
+## Первая дата с 2026-01-01, где есть дождь не короче `hours` часов: [дата, час начала].
+func _rain_day(hours: int) -> Array:
+	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
+	while true:
+		var d := Time.get_datetime_dict_from_unix_time(day)
+		for r in Weather.rains(d.year, d.month, d.day):
+			if r[1] >= hours:
+				return [d, r[0]]
+		day += 86400
+	return []
+
+
+func test_rain() -> void:
+	Weather.enabled = true
+	var old := PetState.from_dict({"stage": "adult_normal"})
+	check(old.rain_loss == 0.0, "сохранение без rain_loss → 0")
+	old.rain_loss = 7.5
+	check(PetState.from_dict(old.to_dict()).rain_loss == 7.5, "rain_loss сохраняется")
+
+	var rd := _rain_day(3)
+	var start := _at(rd[0], rd[1])
+	var s := _pet_at(start)
+	Decay.apply(s, HOUR)
+	check(is_equal_approx(s.happiness, 84), "1 ч дождя бодрствуя: −16, получили %s" % s.happiness)
+	s = _pet_at(start)
+	Decay.apply(s, 3 * HOUR - 60)
+	check(is_equal_approx(s.rain_loss, 15), "к концу дождя добавка упёрлась в 15")
+	Decay.apply(s, 60)
+	check(is_equal_approx(s.happiness, 61), "3 ч дождя: −39, получили %s" % s.happiness)
+	Decay.apply(s, HOUR)
+	check(s.rain_loss == 0.0, "после дождя счётчик обнулился")
+
+	s = _pet_at(start)
+	s.sleeping = true
+	Decay.apply(s, HOUR, [0, 23])
+	check(s.happiness == 100.0, "ночной сон под дождём — счастье не меняется")
+
+	s = _pet_at(start)
+	Decay.apply(s, 2 * HOUR)
+	s = PetState.from_dict(s.to_dict())  # «перезапуск» посреди дождя
+	var before := s.happiness
+	Decay.apply(s, 10 * 60)
+	check(is_equal_approx(before - s.happiness, 8.0 / 6) and s.rain_loss <= 15.0, "после перезапуска лимит 15 держится")
+	Weather.enabled = false
+
+
+# --- небо в дождь ---
+
+func _render(g: Game, frame: int) -> PackedByteArray:
+	var lcd := Lcd.new()
+	g.frame = frame
+	g.render(lcd)
+	var out := lcd.buf.duplicate()
+	lcd.free()
+	return out
+
+
+func test_rain_sky() -> void:
+	check(Sprites.RAIN_CLOUD != null and Sprites.RAIN[0].w == Sprites.RAIN[1].w and Sprites.RAIN[0].h == Sprites.RAIN[1].h,
+			"спрайты тучи и капель загружены, кадры одного размера")
+	Weather.enabled = true
+	var rd := _rain_day(1)
+	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 0.5)))
+	g.state.age = 3 * 86400
+	var sunny := Game.new(_pet_at(_at(rd[0], 3)))  # 03:00 — дождей не бывает
+	var sun_ray := 40 * Lcd.COLS + 58  # верхний луч солнца (sun1, строка 1, столбец 11)
+	check(_render(sunny, 0)[sun_ray] == 1 and _render(g, 0)[sun_ray] == 0, "в дождь солнца нет")
+	check(_render(g, 0) != _render(g, 1), "капли анимируются по тикам")
+	var cloud_x := Lcd.COLS - Sprites.RAIN_CLOUD.w - 1
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.frame = 0
+	g.render(lcd)
+	g.draw_text(clean, "AGE 3", Game.PLAY_Y + 2, 2)
+	var same := true
+	for y in range(Game.PLAY_Y + 1, Game.PLAY_Y + 9):
+		for x in cloud_x:
+			same = same and lcd.get_px(x, y) == clean.get_px(x, y)
+	check(same, "в дождь AGE 3 видна целиком")
+	g.state.age = 999 * 86400
+	lcd.clear()
+	g.render(lcd)
+	clean.clear()
+	g.draw_text(clean, "AGE 999", Game.PLAY_Y + 2, 2)
+	same = true
+	for y in range(Game.PLAY_Y + 2, Game.PLAY_Y + 7):  # строки надписи
+		for x in 2 + Game.text_width("AGE 999", 1) + 1:
+			same = same and lcd.get_px(x, y) == clean.get_px(x, y)
+	check(same, "в дождь AGE 999 не задевает тучу")
+	var panel_clean := true
+	var sunny_buf := _render(sunny, 0)
+	for i in (Game.SEPARATOR_TOP + 1) * Lcd.COLS:
+		panel_clean = panel_clean and lcd.buf[i] == sunny_buf[i]
+	check(panel_clean, "туча и капли не заходят на панель шкал")
+	var low_same := true
+	for i in range(Game.RAIN_BOTTOM * Lcd.COLS, Game.GROUND * Lcd.COLS):
+		low_same = low_same and lcd.buf[i] == sunny_buf[i]
+	check(low_same, "капли не долетают до питомца")
+	lcd.free()
+	clean.free()
+	Weather.enabled = false
