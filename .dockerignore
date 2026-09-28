@@ -1,0 +1,10 @@
+.git
+.venv
+.idea
+.junie
+__pycache__
+*.pyc
+*.tmp
+save.json
+settings.json
+player.json

@@ -8,9 +8,13 @@ from player import Profile
 from settings import Settings
 from state import PetState
 
-SAVE_PATH = Path(__file__).with_name("save.json")
-SETTINGS_PATH = Path(__file__).with_name("settings.json")
-PROFILE_PATH = Path(__file__).with_name("player.json")
+# Папка для сохранений: по умолчанию рядом с кодом, в Docker — смонтированный том.
+DATA_DIR = Path(os.environ.get("TAMAHOCHI_DATA") or Path(__file__).parent)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+SAVE_PATH = DATA_DIR / "save.json"
+SETTINGS_PATH = DATA_DIR / "settings.json"
+PROFILE_PATH = DATA_DIR / "player.json"
 
 
 def _read(path: Path) -> dict | None:
