@@ -32,9 +32,8 @@ DIGESTION_RATE = 20.0   # само по себе — кучка раз в 5 ча
 MAX_POOPS = 3
 POOP_SADNESS = 3.0      # неубранная кучка портит настроение (а вредит — через болезнь)
 
-# Болезнь: заболевает, если все кучки долго не убраны; дальше температура растёт,
+# Болезнь: заболевает, как только набралось MAX_POOPS кучек; дальше температура растёт,
 # пока не вылечат (таблетки, шприц) — или пока не умрёт.
-SICK_AFTER = 6 * HOUR   # столько должны пролежать MAX_POOPS кучек (ночью таймер стоит)
 FEVER_RISE = 4.0        # рост температуры у больного в час — от 0 до смерти ~25 часов
 DEADLY_FEVER = 100.0
 
@@ -98,14 +97,10 @@ def _step(s: PetState, seconds: float, night: bool, grow: float = 1.0) -> None:
         else:
             s.dirty_time = 0.0
 
-        # Болезнь: все кучки лежат SICK_AFTER подряд.
-        if s.poops >= MAX_POOPS:
-            s.filthy_time += seconds
-            if not s.sick and s.filthy_time >= SICK_AFTER:
-                s.sick = True
-                s.care_mistakes += 1
-        else:
-            s.filthy_time = 0.0
+        # Болезнь: набралось максимум кучек.
+        if s.poops >= MAX_POOPS and not s.sick:
+            s.sick = True
+            s.care_mistakes += 1
 
     if s.sick:  # болезнь не спит: температура растёт и ночью
         s.fever = _clamp(s.fever + FEVER_RISE * h)
