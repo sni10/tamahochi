@@ -404,27 +404,29 @@ func test_age() -> void:
 
 func test_weather() -> void:
 	Weather.enabled = true
-	check(Weather.rains(2026, 1, 15) == Weather.rains(2026, 1, 15), "одна дата — одно расписание")
+	check(Weather.rain_of(2026, 1, 15) == Weather.rain_of(2026, 1, 15), "одна дата — один результат")
 	var ok := true
-	var schedules := {}
+	var rainy := 0
+	var infecting := 0
 	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
 	for i in 1000:
 		var d := Time.get_datetime_dict_from_unix_time(day + i * 86400)
-		var rs := Weather.rains(d.year, d.month, d.day)
-		schedules[str(rs)] = true
-		ok = ok and rs.size() in [1, 2]
-		var prev_end := 0
-		for r in rs:
-			var window: int = 6 if r[0] < 14 else 14
-			ok = ok and r[1] >= 1 and r[1] <= 3 and r[0] - window <= 5 and r[0] >= prev_end and r[0] + r[1] <= 22
-			prev_end = r[0] + r[1]
-	check(ok, "1000 дат: 1–2 дождя, 1–3 ч, старт в окне, без пересечений, до 22:00")
-	check(schedules.size() > 50, "разные даты — разные расписания: %d вариантов" % schedules.size())
-	var r: Array = Weather.rains(2026, 1, 15)[0]
-	check(Weather.is_rain(_local(r[0] + 0.5)) and not Weather.is_rain(_local(r[0] + r[1] + 0.01)), "is_rain внутри и после дождя")
-	check(not Weather.is_rain(_local(3)), "ночью дождя нет")
+		var r := Weather.rain_of(d.year, d.month, d.day)
+		if r.is_empty():
+			continue
+		rainy += 1
+		infecting += int(r.infects)
+		ok = ok and r.hours >= 1 and r.hours <= 3 and r.start >= 6 and r.start <= 19 and r.start + r.hours <= 22
+	check(ok, "1000 дат: 0–1 дождь, 1–3 ч, старт 06–19, до 22:00")
+	check(rainy >= 200 and rainy <= 300, "дождливых дат 20–30%%: %d" % rainy)
+	check(infecting >= rainy * 0.7 and infecting <= rainy * 0.9, "заражающих 70–90%%: %d из %d" % [infecting, rainy])
+	var rd := _rain_day(1)
+	var start := _at(rd[0], rd[1])
+	var hours: int = Weather.rain_at(start + 60).hours
+	check(Weather.is_rain(start + 60) and not Weather.is_rain(start + hours * HOUR + 60), "is_rain внутри и после дождя")
+	check(not Weather.is_rain(_at(rd[0], 3)), "ночью дождя нет")
 	Weather.enabled = false
-	check(not Weather.is_rain(_local(r[0] + 0.5)), "выключатель")
+	check(not Weather.is_rain(start + 60), "выключатель")
 
 
 # --- дождь и счастье ---
@@ -434,14 +436,15 @@ func _at(d: Dictionary, hours: float) -> float:
 			"hour": 0, "minute": 0, "second": 0}) - Decay.tz_bias * 60 + hours * HOUR
 
 
-## Первая дата с 2026-01-01, где есть дождь не короче `hours` часов: [дата, час начала].
-func _rain_day(hours: int) -> Array:
+## Первая дата с 2026-01-01, где есть дождь не короче `hours` часов (и, если задано, заражающий
+## или нет): [дата, час начала].
+func _rain_day(hours: int, infects: Variant = null) -> Array:
 	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
 	while true:
 		var d := Time.get_datetime_dict_from_unix_time(day)
-		for r in Weather.rains(d.year, d.month, d.day):
-			if r[1] >= hours:
-				return [d, r[0]]
+		var r := Weather.rain_of(d.year, d.month, d.day)
+		if r and r.hours >= hours and (infects == null or r.infects == infects):
+			return [d, r.start]
 		day += 86400
 	return []
 
