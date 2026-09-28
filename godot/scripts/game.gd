@@ -310,6 +310,11 @@ func _use_bag_item() -> void:
 	if _is_birth():
 		_set_mode("idle")
 		return
+	# Полностью вылечить можно только после уборки: пока лежат кучки, болезнь не уходит.
+	var cures := bag_item == SYRINGE or s.fever - PILL_FEVER < 1
+	if s.sick and s.poops and cures:
+		_set_mode("no")
+		return
 	if bag_item == PILL:
 		if not s.sick or not pills_left():
 			_set_mode("no")

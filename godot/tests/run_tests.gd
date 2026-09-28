@@ -234,12 +234,20 @@ func test_game() -> void:
 	g.mode = "bag"
 	g.state.sick = true
 	g.state.fever = 8
+	g.state.poops = 1
 	g.press_b()
-	check(g.mode == "heal" and not g.state.sick and g.pills_left() == 4, "таблетка вылечила")
-	g.state.poops = 3
-	g.state.digestion = 0.0
-	Decay.apply(g.state, HOUR)
-	check(not g.state.sick and g.state.fever == 0.0, "вылечен, кучки не убраны — не заболевает снова")
+	check(g.mode == "no" and g.state.sick and g.state.fever == 8 and g.pills_left() == 5,
+			"кучки не убраны — последняя таблетка не лечит и не тратится")
+	g.mode = "bag"
+	g.state.fever = 25
+	g.press_b()
+	check(g.mode == "heal" and g.state.sick and g.state.fever == 15 and g.pills_left() == 4,
+			"с кучками таблетка сбивает температуру, но не до конца")
+	g.state.poops = 0
+	g.state.fever = 8
+	g.mode = "bag"
+	g.press_b()
+	check(g.mode == "heal" and not g.state.sick and g.pills_left() == 3, "после уборки таблетка вылечила")
 	g.state.sick = true
 	g.state.fever = 10.0000001
 	g.mode = "bag"
@@ -257,6 +265,13 @@ func test_game() -> void:
 	g.state.satiety = 10
 	g.press_b()
 	check(g.state.satiety == 100 and g.profile.syringes == 1 and g.profile_changed, "шприц")
+	g.mode = "bag"
+	g.state.sick = true
+	g.state.poops = 2
+	g.press_b()
+	check(g.mode == "no" and g.state.sick and g.profile.syringes == 1, "больного с кучками шприц не лечит и не тратится")
+	g.state.poops = 0
+	g.state.sick = false
 	g.mode = "bag"
 	g.bag_item = Game.BAG_SETTINGS
 	g.press_b()
