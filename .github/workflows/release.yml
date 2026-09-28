@@ -1,0 +1,79 @@
+# Тесты на каждый PR и push в main; на push в main (merge) — релиз с подписанным APK.
+# Версия: последний тег vX.Y.Z → Z+1. Исходники GitHub прикладывает к релизу сам.
+name: Release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-ci
+          key: godot-${{ env.GODOT_VERSION }}
+      - run: bash .github/scripts/setup-godot.sh
+      - run: $GODOT --headless --path . --import
+      - run: $GODOT --headless --path . -s res://tests/run_tests.gd
+
+  release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release  # два merge подряд не возьмут один номер версии
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # нужны теги для номера версии
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-ci
+          key: godot-android-${{ env.GODOT_VERSION }}
+      - run: bash .github/scripts/setup-godot.sh android
+
+      - name: Version
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)
+          IFS=. read -r major minor patch <<< "${last#v}"
+          version="$major.$minor.$((patch + 1))"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          sed -i "s/^version\/code=.*/version\/code=${{ github.run_number }}/; s/^version\/name=.*/version\/name=\"$version\"/" export_presets.cfg
+          grep '^version/' export_presets.cfg
+
+      - name: Keystore
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then echo "::error::Нет секрета ANDROID_KEYSTORE_BASE64 — релиз не выпускается"; exit 1; fi
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
+      - name: Export APK
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/release.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          mkdir -p build
+          $GODOT --headless --path . --import
+          $GODOT --headless --path . --install-android-build-template --export-release "Android" "build/tamahochi-v$VERSION.apk"
+          test -f "build/tamahochi-v$VERSION.apk"  # Godot не всегда возвращает ошибку кодом выхода
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "v$VERSION" "build/tamahochi-v$VERSION.apk" --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes
