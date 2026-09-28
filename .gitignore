@@ -11,3 +11,4 @@ __pycache__/
 save.json
 *.tmp
 settings.json
+player.json

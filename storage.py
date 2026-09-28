@@ -4,11 +4,13 @@ import json
 import os
 from pathlib import Path
 
+from player import Profile
 from settings import Settings
 from state import PetState
 
 SAVE_PATH = Path(__file__).with_name("save.json")
 SETTINGS_PATH = Path(__file__).with_name("settings.json")
+PROFILE_PATH = Path(__file__).with_name("player.json")
 
 
 def _read(path: Path) -> dict | None:
@@ -53,3 +55,16 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
 
 def save_settings(settings: Settings, path: Path = SETTINGS_PATH) -> None:
     _write(settings.to_dict(), path)
+
+
+def load_profile(path: Path = PROFILE_PATH) -> Profile:
+    try:
+        data = _read(path)
+        return Profile.from_dict(data) if data is not None else Profile()
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        print(f"Не удалось прочитать {path}: {e}. Профиль по умолчанию.")
+        return Profile()
+
+
+def save_profile(profile: Profile, path: Path = PROFILE_PATH) -> None:
+    _write(profile.to_dict(), path)

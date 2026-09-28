@@ -2,6 +2,7 @@
 
 import tkinter as tk
 
+import shop
 import storage
 from game import COLS, ROWS, TICK_MS, Game
 from lcd import LCD
@@ -16,6 +17,10 @@ CHROME_HEIGHT = 270
 MAX_PIXEL = 9
 
 # Латиница и та же клавиша в русской раскладке, плюс стрелка/Enter/Esc.
+# Отладка: «покупки» без магазина — идут через тот же shop.grant(), что и на Android.
+DEBUG_PURCHASES = {"1": shop.AD_REWARD, "g": shop.AD_REWARD, "п": shop.AD_REWARD,
+                   "2": shop.SYRINGE_PACK, "3": shop.PREMIUM, "4": "pet"}
+
 KEYS = {
     "a": "a", "ф": "a", "Left": "a",
     "b": "b", "и": "b", "Return": "b",
@@ -70,6 +75,14 @@ class App:
         canvas.bind("<ButtonRelease-1>", on_release)
 
     def _on_key(self, event) -> None:
+        product = DEBUG_PURCHASES.get(event.char.lower())
+        if product:
+            if product == "pet":  # купить питомца, показанного на экране выбора
+                product = shop.pet_product(self.game.skin.key)
+            if shop.grant(self.game.profile, product):
+                self.game.profile_changed = True
+            self._press(lambda: None)
+            return
         key = KEYS.get(event.char.lower()) or KEYS.get(event.keysym)
         if key:
             self._press(getattr(self.game, f"press_{key}"))
@@ -79,6 +92,9 @@ class App:
         if self.game.settings_changed:
             storage.save_settings(self.game.settings)
             self.game.settings_changed = False
+        if self.game.profile_changed:
+            storage.save_profile(self.game.profile)
+            self.game.profile_changed = False
         self.game.render(self.lcd)
 
     def _loop(self) -> None:
@@ -88,6 +104,7 @@ class App:
 
     def _save(self) -> None:
         storage.save_settings(self.game.settings)
+        storage.save_profile(self.game.profile)
         if self.game.savable:
             storage.save(self.game.state)
 

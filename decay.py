@@ -30,8 +30,12 @@ HEALING_THRESHOLD = 50.0
 
 DIGESTION_RATE = 20.0   # само по себе — кучка раз в 5 часов, еда ускоряет (см. game.py)
 MAX_POOPS = 3
-POOP_DAMAGE = 3.0       # урон здоровью за каждую неубранную кучку
-POOP_SADNESS = 3.0      # и дополнительная потеря счастья
+POOP_SADNESS = 3.0      # неубранная кучка портит настроение (а вредит — через болезнь)
+
+# Болезнь: заболевает, как только набралось MAX_POOPS кучек; дальше температура растёт,
+# пока не вылечат (таблетки, шприц) — или пока не умрёт.
+FEVER_RISE = 4.0        # рост температуры у больного в час — от 0 до смерти ~25 часов
+DEADLY_FEVER = 100.0
 
 Quiet = tuple[int, int] | None  # тихие часы (с, до) в часах суток; None — ночи нет
 
@@ -93,7 +97,15 @@ def _step(s: PetState, seconds: float, night: bool, grow: float = 1.0) -> None:
         else:
             s.dirty_time = 0.0
 
-    damage = 0.0 if deep else POOP_DAMAGE * s.poops
+        # Болезнь: набралось максимум кучек.
+        if s.poops >= MAX_POOPS and not s.sick:
+            s.sick = True
+            s.care_mistakes += 1
+
+    if s.sick:  # болезнь не спит: температура растёт и ночью
+        s.fever = _clamp(s.fever + FEVER_RISE * h)
+
+    damage = 0.0
     if s.satiety <= 0:
         damage += STARVING_DAMAGE
     if s.happiness <= 0:
@@ -103,7 +115,7 @@ def _step(s: PetState, seconds: float, night: bool, grow: float = 1.0) -> None:
     elif s.satiety >= HEALING_THRESHOLD and s.happiness >= HEALING_THRESHOLD:
         s.health = _clamp(s.health + HEALING * h)
 
-    if s.health <= 0:
+    if s.health <= 0 or s.fever >= DEADLY_FEVER:
         s.alive = False
         s.sleeping = False
     elif s.sleeping and s.energy >= 100 and not night:
