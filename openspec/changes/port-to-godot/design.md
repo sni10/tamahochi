@@ -62,7 +62,7 @@ godot/
 `Timer` 0,5 с → `game.tick()` → `game.render(lcd)`. `tick()` сам вызывает `Decay.advance(now)`, поэтому возврат из фона догоняется первым же тиком, а эволюция «пока были в фоне» показывается тем же кодом, что в живой игре. Сохранение: `Timer` 60 с, `NOTIFICATION_APPLICATION_PAUSED`, `NOTIFICATION_APPLICATION_FOCUS_OUT`, `NOTIFICATION_WM_CLOSE_REQUEST`. При запуске — как `main.py`: загрузить, `advance`, при смене стадии `start_evolution`.
 
 ### D8. Кнопки и ввод
-`HBoxContainer` из трёх `Button` со `StyleBoxFlat` (круг, цвета корпуса прототипа: `#f2b8c6` корпус, `#f5d45c`/`#d9b53a` кнопка, `#4a4458` рамка), сигнал `button_up`. `Button` уже умеет «нажатое» состояние и касания (эмуляция тача мышью включена в проекте). Клавиатура — `_unhandled_key_input`, таблица `KEYS` как в `app.py` по `unicode` и `keycode`. Отладочные покупки — только при `OS.is_debug_build()`.
+`HBoxContainer` из трёх `Button` со `StyleBoxFlat` (круг, цвета корпуса прототипа: `#f2b8c6` корпус, `#f5d45c`/`#d9b53a` кнопка, `#4a4458` рамка), сигнал `pressed` (срабатывает при отпускании над кнопкой). `Button` уже умеет «нажатое» состояние и касания (эмуляция тача мышью включена в проекте). Клавиатура — `_unhandled_key_input`, таблица `KEYS` как в `app.py` по `unicode` и `keycode`. Отладочные покупки — только при `OS.is_debug_build()`.
 
 ### D9. Хранилище
 `user://save.json`, `settings.json`, `player.json`. Запись: `FileAccess` в `*.tmp` → `DirAccess.rename_absolute(tmp, path)`. Чтение: `JSON.parse_string`; не словарь → значение по умолчанию. Имена полей JSON — те же, что в Python, поэтому сохранение прототипа читается как есть. Числа из JSON приходят как float — `from_dict` приводит `int`-поля (`care_mistakes`, `poops`, `pills_used`) явно.

@@ -114,7 +114,11 @@ BIRTH ──► BABY ──► CHILD ──► ADULT (GOOD / NORMAL / BAD)
 **Движок: Godot 4** — GDScript близок к Python; есть официальные плагины Play Billing
 и AdMob, экспорт в Android из коробки.
 
-## B.1 Перенос прототипа
+## B.1 Перенос прототипа — ✅ код готов, ждёт ручной проверки на устройстве
+
+Проект — `godot/` (Godot 4.7), change `openspec/changes/port-to-godot`.
+Тесты (в т.ч. паритет с Python): `godot --headless --path godot -s res://tests/run_tests.gd`;
+эталон паритета: `python godot/tests/make_parity.py`. Ассеты — копия `assets/`, тест ловит расхождение.
 
 1. Загрузчик спрайтов `assets/*.txt` — файлы переносятся как есть.
 2. Отрисовка ЖК-экрана (сетка пикселей → своё рисование в `_draw()`).
