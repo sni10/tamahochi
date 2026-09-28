@@ -70,6 +70,11 @@ class App:
         canvas.bind("<ButtonRelease-1>", on_release)
 
     def _on_key(self, event) -> None:
+        if event.char.lower() in ("g", "п"):  # отладка: «купить» шприц
+            self.game.profile.syringes += 1
+            self.game.profile_changed = True
+            self._press(lambda: None)
+            return
         key = KEYS.get(event.char.lower()) or KEYS.get(event.keysym)
         if key:
             self._press(getattr(self.game, f"press_{key}"))
@@ -79,6 +84,9 @@ class App:
         if self.game.settings_changed:
             storage.save_settings(self.game.settings)
             self.game.settings_changed = False
+        if self.game.profile_changed:
+            storage.save_profile(self.game.profile)
+            self.game.profile_changed = False
         self.game.render(self.lcd)
 
     def _loop(self) -> None:
@@ -88,6 +96,7 @@ class App:
 
     def _save(self) -> None:
         storage.save_settings(self.game.settings)
+        storage.save_profile(self.game.profile)
         if self.game.savable:
             storage.save(self.game.state)
 

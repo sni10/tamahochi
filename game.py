@@ -11,6 +11,7 @@ import time
 import decay
 import evolution
 import sprites
+from player import Profile
 from settings import Settings
 from state import PetState
 
@@ -18,7 +19,7 @@ COLS, ROWS = 72, 156
 TICK_MS = 500
 
 # Панель шкал
-STATUS_Y, STATUS_STEP = 3, 8
+STATUS_Y, STATUS_STEP = 3, 6
 BAR_X, BAR_W = 9, 62
 SEPARATOR_TOP = 35
 
@@ -37,11 +38,17 @@ ICON_Y, ICON_X, ICON_STEP = 139, 2, 14
 # Экран выбора
 NAME_Y, DOTS_Y = 9, 25
 
-ICONS = (sprites.ICON_FOOD, sprites.ICON_PLAY, sprites.ICON_SLEEP, sprites.ICON_CLEAN, sprites.ICON_SETTINGS)
-FEED, PLAY, SLEEP, CLEAN, SETTINGS = range(len(ICONS))
+ICONS = (sprites.ICON_FOOD, sprites.ICON_PLAY, sprites.ICON_SLEEP, sprites.ICON_CLEAN, sprites.ICON_BAG)
+FEED, PLAY, SLEEP, CLEAN, BAG = range(len(ICONS))
+
+# Содержимое сумки: (иконка, название)
+BAG_ITEMS = ((sprites.ITEM_PILL, "PILL"), (sprites.ITEM_SYRINGE, "SYRINGE"), (sprites.ICON_SETTINGS, "SETTINGS"))
+PILL, SYRINGE, BAG_SETTINGS = range(len(BAG_ITEMS))
+FREE_PILLS_PER_DAY = 5
+PILL_FEVER = 10  # сколько температуры снимает таблетка
 
 # Длительность анимаций в тиках; пока анимация идёт, кнопки игнорируются.
-ANIM_LENGTH = {"eat": 8, "play": 8, "no": 4, "clean": 6, "evolve": 10}
+ANIM_LENGTH = {"eat": 8, "play": 8, "no": 4, "clean": 6, "evolve": 10, "heal": 6}
 WAKE_BEFORE = 60  # за сколько игровых секунд до появления яйцо трескается / корзинка шевелится
 
 FEED_AMOUNT = 15
@@ -55,7 +62,7 @@ SAD_THRESHOLD = 25    # ниже — грустная мордочка и миг
 
 class Game:
     def __init__(self, state: PetState | None, speed: float = 1.0, settings: Settings | None = None,
-                 grow: float = 1.0):
+                 grow: float = 1.0, profile: Profile | None = None):
         """state=None — новая игра, начинаем с выбора питомца.
 
         speed ускоряет всё время, grow — только взросление (для отладки эволюции).
@@ -66,6 +73,9 @@ class Game:
         self.settings = settings or Settings()
         self.settings_field = 0         # 0 — начало тихих часов, 1 — конец
         self.settings_changed = False   # App сохраняет настройки и сбрасывает флаг
+        self.profile = profile or Profile()
+        self.profile_changed = False    # то же для профиля игрока
+        self.bag_item = 0               # какой предмет показан в сумке
         self.selected: int | None = None
         self.choice = 0  # какой питомец показан на экране выбора
         self.mode = "idle" if state else "select"
@@ -178,6 +188,9 @@ class Game:
         if self.mode == "settings":
             self.settings_field = 1 - self.settings_field
             return
+        if self.mode == "bag":
+            self.bag_item = (self.bag_item + 1) % len(BAG_ITEMS)
+            return
         if self.mode == "dead" or self._busy():
             return
         self.selected = 0 if self.selected is None else (self.selected + 1) % len(ICONS)
@@ -203,11 +216,13 @@ class Game:
                 st.quiet_end = (st.quiet_end + 1) % 24
             self.settings_changed = True
             return
+        if self.mode == "bag":
+            self._use_bag_item()
+            return
         if self._busy() or self.selected is None:
             return
-        if self.selected == SETTINGS:
-            self.settings_field = 0
-            self._set_mode("settings")
+        if self.selected == BAG:
+            self._set_mode("bag")
             return
         if self._is_birth():
             return  # в яйце/корзинке ничего не нужно
@@ -232,7 +247,7 @@ class Game:
                 s.digestion += FEED_DIGESTION
                 self._set_mode("eat")
         elif self.selected == PLAY:
-            if s.energy < TIRED_THRESHOLD:
+            if s.energy < TIRED_THRESHOLD or s.sick:
                 self._set_mode("no")
             else:
                 s.happiness = min(100.0, s.happiness + PLAY_JOY)
@@ -246,11 +261,55 @@ class Game:
             self.choice = (self.choice + 1) % len(sprites.PETS)
             return
         if self.mode == "settings":
+            self._set_mode("bag")  # настройки открываются из сумки — туда и возвращаемся
+            return
+        if self.mode == "bag":
             self._set_mode("idle")
             return
         if self.mode == "dead" or self._busy():
             return
         self.selected = None
+
+    # --- сумка ---
+
+    def _pill_day(self) -> str:
+        return time.strftime("%Y-%m-%d", time.localtime(self.state.clock))
+
+    def pills_left(self) -> int:
+        """Бесплатные таблетки на сегодня (игровой день)."""
+        s = self.state
+        used = s.pills_used if s.pills_day == self._pill_day() else 0
+        return max(0, FREE_PILLS_PER_DAY - used)
+
+    def _use_bag_item(self) -> None:
+        s = self.state
+        if self.bag_item == BAG_SETTINGS:
+            self.settings_field = 0
+            self._set_mode("settings")
+            return
+        if self._is_birth():
+            self._set_mode("idle")
+            return
+        if self.bag_item == PILL:
+            if not s.sick or not self.pills_left():
+                self._set_mode("no")
+                return
+            if s.pills_day != self._pill_day():
+                s.pills_day, s.pills_used = self._pill_day(), 0
+            s.pills_used += 1
+            s.fever = max(0.0, s.fever - PILL_FEVER)
+            if s.fever <= 0:
+                s.sick = False  # вылечили
+        elif self.bag_item == SYRINGE:
+            if not self.profile.syringes:
+                self._set_mode("no")
+                return
+            # Шприц лечит всё сразу: болезнь, голод, усталость.
+            self.profile.syringes -= 1
+            self.profile_changed = True
+            s.sick, s.fever = False, 0.0
+            s.satiety = s.energy = 100.0
+        self._set_mode("heal")
 
     # --- отрисовка ---
 
@@ -258,8 +317,8 @@ class Game:
         lcd.clear()
         self._dotted(lcd, SEPARATOR_TOP)
         self._dotted(lcd, SEPARATOR_BOTTOM)
-        if self.mode == "settings":
-            self._draw_settings(lcd)
+        if self.mode in ("settings", "bag"):
+            getattr(self, f"_draw_{self.mode}")(lcd)
             lcd.flush()
             return
         self._draw_room(lcd)
@@ -281,16 +340,18 @@ class Game:
 
     def _draw_status(self, lcd) -> None:
         s = self.state
+        # (значок, значение, тревога — значок мигает)
         bars = (
-            (sprites.MINI_SATIETY, s.satiety),
-            (sprites.MINI_HAPPINESS, s.happiness),
-            (sprites.MINI_ENERGY, s.energy),
-            (sprites.MINI_HEALTH, s.health),
+            (sprites.MINI_SATIETY, s.satiety, s.satiety < SAD_THRESHOLD),
+            (sprites.MINI_HAPPINESS, s.happiness, s.happiness < SAD_THRESHOLD),
+            (sprites.MINI_ENERGY, s.energy, s.energy < SAD_THRESHOLD),
+            (sprites.MINI_HEALTH, s.health, s.health < SAD_THRESHOLD),
+            (sprites.MINI_FEVER, s.fever, s.sick),
         )
         inner_w = BAR_W - 2
-        for i, (icon, value) in enumerate(bars):
+        for i, (icon, value, alarm) in enumerate(bars):
             y = STATUS_Y + i * STATUS_STEP
-            if value >= SAD_THRESHOLD or self.frame % 2:  # низкий показатель мигает
+            if not alarm or self.frame % 2:
                 lcd.blit(icon, 1, y)
             # рамка со скруглёнными углами
             lcd.hline(BAR_X + 1, y, inner_w)
@@ -346,9 +407,11 @@ class Game:
             else:
                 lcd.blit(sprites.Z_SMALL, x + look.w - 2, y - 6)
             return
-        sad = s.satiety < SAD_THRESHOLD or s.happiness < SAD_THRESHOLD or s.poops
+        sad = s.satiety < SAD_THRESHOLD or s.happiness < SAD_THRESHOLD or s.poops or s.sick
         frames = look.sad if sad else look.idle
         lcd.blit(frames[self.frame % 2], x, y, flip=self.pet_dir < 0)
+        if s.sick and self.frame % 2:  # череп над головой больного
+            lcd.blit(sprites.SICK, x + look.w - 3, y - sprites.SICK.h - 2)
 
     def _draw_birth(self, lcd) -> None:
         waking = self.state.age >= evolution.BIRTH_UNTIL - WAKE_BEFORE
@@ -463,4 +526,32 @@ class Game:
         now = time.localtime(self.state.clock)
         self._draw_text(lcd, f"NOW {now.tm_hour:02d}:{now.tm_min:02d}", 112)
         self._draw_text(lcd, "A NEXT  B +1", ICON_Y)
+        self._draw_text(lcd, "C BACK", ICON_Y + 9)
+
+    def _draw_heal(self, lcd) -> None:
+        # Довольный питомец и «плюсики» вокруг.
+        look = self.look
+        x, y = self._home_x(), self._y_for(look.h)
+        lcd.blit(look.happy, x, y)
+        plus = sprites.FONT["+"]
+        spots = ((-5, 4), (look.w + 2, 8), (-3, 16), (look.w, 0))
+        for i, (dx, dy) in enumerate(spots):
+            if (i + self.mode_ticks) % 2:
+                lcd.blit(plus, x + dx, y + dy)
+
+    # --- экран сумки ---
+
+    def _draw_bag(self, lcd) -> None:
+        icon, name = BAG_ITEMS[self.bag_item]
+        self._draw_text(lcd, "BAG", 15)
+        lcd.blit(icon, (COLS - icon.w * 2) // 2, 50, scale=2)
+        lcd.blit(sprites.ARROW_LEFT, 8, 58)
+        lcd.blit(sprites.ARROW_RIGHT, COLS - 8 - sprites.ARROW_RIGHT.w, 58)
+        self._draw_text(lcd, name, 84)
+        if self.bag_item == PILL:
+            self._draw_text(lcd, f"FREE {self.pills_left()}/{FREE_PILLS_PER_DAY}", 96)
+        elif self.bag_item == SYRINGE:
+            self._draw_text(lcd, f"X {self.profile.syringes}", 96)
+        action = "OPEN" if self.bag_item == BAG_SETTINGS else "USE"
+        self._draw_text(lcd, f"A NEXT  B {action}", ICON_Y)
         self._draw_text(lcd, "C BACK", ICON_Y + 9)
