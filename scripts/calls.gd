@@ -21,19 +21,21 @@ static func reasons(s: PetState) -> Array[String]:
 
 
 ## {"at": момент зова, "reasons": [...]} или {}, если за HORIZON зова не будет.
-## Считает на копии: переданное состояние не меняется. Зов, выпавший на тихие часы, ждёт утра.
-static func next_call(state: PetState, quiet: Array, now: float) -> Dictionary:
+## Считает на копиях: переданные состояние и профиль (запас зонтиков) не меняются.
+## Зов, выпавший на тихие часы, ждёт утра.
+static func next_call(state: PetState, quiet: Array, now: float, profile: Storage.Profile = null) -> Dictionary:
 	var s := PetState.from_dict(state.to_dict())
-	Decay.advance(s, now, 1.0, quiet)
+	var p := Storage.Profile.from_dict(profile.to_dict()) if profile else null
+	Decay.advance(s, now, 1.0, quiet, 1.0, p)
 	var elapsed := 0.0
 	while reasons(s).is_empty():
 		if elapsed >= HORIZON:
 			return {}
-		Decay.apply(s, Decay.STEP, quiet)
+		Decay.apply(s, Decay.STEP, quiet, 1.0, p)
 		elapsed += Decay.STEP
 	while Decay.is_night(s.clock, quiet):
 		if s.alive:
-			Decay.apply(s, Decay.STEP, quiet)
+			Decay.apply(s, Decay.STEP, quiet, 1.0, p)
 		else:
 			s.clock += Decay.STEP  # мёртвого симуляция не двигает — двигаем часы сами
 		elapsed += Decay.STEP

@@ -4,8 +4,11 @@ class_name Shop
 
 const SYRINGE_PACK_SIZE := 5
 const PREMIUM_SYRINGES := 10
+const PACK_UMBRELLAS := 5
+const PREMIUM_UMBRELLAS := 10
 
 const AD_REWARD := "ad_reward"        # рекламный ролик — 1 шприц
+const AD_UMBRELLA := "ad_umbrella"    # рекламный ролик — 1 зонтик
 const SYRINGE_PACK := "syringe_pack"  # consumable: можно покупать снова
 const PREMIUM := "premium"            # non-consumable: все питомцы, включая будущие
 const PET_PREFIX := "pet_"            # non-consumable: pet_cat, pet_bunny, ...
@@ -23,13 +26,17 @@ static func is_unlocked(profile: Storage.Profile, skin: Sprites.PetSkin) -> bool
 static func grant(profile: Storage.Profile, product_id: String) -> bool:
 	if product_id == AD_REWARD:
 		profile.syringes += 1
+	elif product_id == AD_UMBRELLA:
+		profile.umbrellas += 1
 	elif product_id == SYRINGE_PACK:
 		profile.syringes += SYRINGE_PACK_SIZE
+		profile.umbrellas += PACK_UMBRELLAS
 	elif product_id == PREMIUM:
 		if profile.premium:
 			return false
 		profile.premium = true
 		profile.syringes += PREMIUM_SYRINGES
+		profile.umbrellas += PREMIUM_UMBRELLAS
 	elif product_id.begins_with(PET_PREFIX):
 		var key := product_id.trim_prefix(PET_PREFIX)
 		var skin: Sprites.PetSkin = Sprites.PETS.get(key)

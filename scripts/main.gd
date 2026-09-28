@@ -1,7 +1,7 @@
 extends Control
 ## Корпус: экран, три кнопки, клавиатура, игровой цикл и автосохранение (≙ app.py + main.py).
 ## Отладка: godot --path . -- --speed 60 | --grow 3600;
-## «покупки» (только debug): 1/G/П — ролик = шприц, 2 — пачка, 3 — Premium, 4 — показанный питомец.
+## «покупки» (только debug): 1/G/П — ролик = шприц, 2 — пачка, 3 — Premium, 4 — показанный питомец, 5 — ролик = зонтик.
 
 const SHELL := Color("#f2b8c6")
 const BEZEL := Color("#4a4458")
@@ -10,7 +10,7 @@ const BUTTON_PRESSED := Color("#d9b53a")
 const AUTOSAVE_SEC := 60.0
 
 const DEBUG_PURCHASES := {"1": Shop.AD_REWARD, "g": Shop.AD_REWARD, "п": Shop.AD_REWARD,
-		"2": Shop.SYRINGE_PACK, "3": Shop.PREMIUM, "4": "pet"}
+		"2": Shop.SYRINGE_PACK, "3": Shop.PREMIUM, "4": "pet", "5": Shop.AD_UMBRELLA}
 ## Латиница и та же клавиша в русской раскладке, плюс стрелки/Enter/Esc.
 const KEYS := {"a": "a", "ф": "a", "b": "b", "и": "b", "c": "c", "с": "c"}
 const KEYCODES := {KEY_LEFT: "a", KEY_ENTER: "b", KEY_KP_ENTER: "b", KEY_ESCAPE: "c", KEY_RIGHT: "c"}
@@ -28,8 +28,11 @@ func _ready() -> void:
 	var profile := Storage.load_profile()
 	var state := Storage.load_pet()  # null — новая игра, начнём с выбора питомца
 	var stage_before := state.stage if state else ""
-	if state:  # догоняем время, пока программа была закрыта
-		Decay.advance(state, Time.get_unix_time_from_system(), 1.0, settings.quiet())
+	if state:  # догоняем время, пока программа была закрыта (зонтики раскрываются и офлайн)
+		var umbrellas_before := profile.umbrellas
+		Decay.advance(state, Time.get_unix_time_from_system(), 1.0, settings.quiet(), 1.0, profile)
+		if profile.umbrellas != umbrellas_before:
+			Storage.save_profile(profile)
 	game = Game.new(state, args.speed, settings, args.grow, profile)
 	if state and state.alive and state.stage != stage_before:
 		game.start_evolution(stage_before)  # вырос, пока игра была закрыта
@@ -135,7 +138,7 @@ func _press(action: String) -> void:
 
 func _on_tick() -> void:
 	game.tick()
-	game.render(lcd)
+	_press("")  # сохранить профиль, если в тике раскрылся зонтик, и перерисовать
 
 
 func _save() -> void:

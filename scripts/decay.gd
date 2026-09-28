@@ -53,7 +53,7 @@ static func _clamp(value: float) -> float:
 	return clampf(value, 0.0, 100.0)
 
 
-static func _step(s: PetState, seconds: float, night: bool, grow := 1.0) -> void:
+static func _step(s: PetState, seconds: float, night: bool, grow := 1.0, profile: Storage.Profile = null) -> void:
 	s.age += seconds * grow
 	if s.stage == Evolution.BIRTH:  # в яйце/корзинке ничего не тратится, только растём
 		Evolution.grow(s)
@@ -76,14 +76,26 @@ static func _step(s: PetState, seconds: float, night: bool, grow := 1.0) -> void
 		s.happiness = _clamp(s.happiness + HAPPINESS_AWAKE * h)
 		s.energy = _clamp(s.energy + ENERGY_AWAKE * h)
 
-	if Weather.is_rain(s.clock):
-		if not deep:  # в ночном сне счастье не тратится — и дождь не отнимает
+	var rain := Weather.rain_at(s.clock)
+	if rain:
+		if s.rain_cover == "":  # защита решается один раз на дождь — в первую минуту, спит питомец или нет
+			if profile and profile.umbrellas > 0:
+				profile.umbrellas -= 1
+				s.rain_cover = "umbrella"
+			else:
+				s.rain_cover = "none"
+				if rain.infects and not s.sick:
+					s.sick = true
+					s.care_mistakes += 1
+		# под зонтиком дождь не отнимает счастья; в ночном сне оно не тратится вовсе
+		if not deep and s.rain_cover != "umbrella":
 			var joy_rate := HAPPINESS_ASLEEP if s.sleeping else HAPPINESS_AWAKE
 			var extra := minf(-joy_rate * h, RAIN_JOY_MAX - s.rain_loss)
 			s.happiness = _clamp(s.happiness - extra)
 			s.rain_loss += extra
 	else:
 		s.rain_loss = 0.0
+		s.rain_cover = ""
 
 	if not deep:  # ночью пищеварение и кучки «замирают»
 		s.digestion += DIGESTION_RATE * Evolution.DIGESTION_FACTOR.get(s.stage, 1.0) * h
@@ -137,7 +149,8 @@ static func _step(s: PetState, seconds: float, night: bool, grow := 1.0) -> void
 
 
 ## Прожить `seconds` секунд игрового времени; игровые часы s.clock идут вместе с ним.
-static func apply(s: PetState, seconds: float, quiet: Array = [], grow := 1.0) -> void:
+## profile — запас зонтиков: раскрываются сами в начале дождя (null — зонтиков нет).
+static func apply(s: PetState, seconds: float, quiet: Array = [], grow := 1.0, profile: Storage.Profile = null) -> void:
 	while seconds > 0 and s.alive:
 		var chunk := minf(STEP, seconds)
 		var was_night := is_night(s.clock, quiet)
@@ -148,12 +161,12 @@ static func apply(s: PetState, seconds: float, quiet: Array = [], grow := 1.0) -
 				s.sleeping = true   # наступила ночь — спать
 			elif was_night and not night:
 				s.sleeping = false  # утро — подъём
-		_step(s, chunk, night, grow)
+		_step(s, chunk, night, grow, profile)
 		seconds -= chunk
 
 
 ## Догнать состояние до момента `now` (реальное время × speed).
-static func advance(s: PetState, now: float, speed := 1.0, quiet: Array = [], grow := 1.0) -> void:
+static func advance(s: PetState, now: float, speed := 1.0, quiet: Array = [], grow := 1.0, profile: Storage.Profile = null) -> void:
 	var elapsed := maxf(0.0, now - s.updated_at)  # защита от перевода часов назад
-	apply(s, elapsed * speed, quiet, grow)
+	apply(s, elapsed * speed, quiet, grow, profile)
 	s.updated_at = now
