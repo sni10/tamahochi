@@ -1,7 +1,0 @@
-; Свойства питомца. Стадии лежат рядом: baby, child, adult_good, adult_normal, adult_bad.
-; birth — откуда появляется: egg (яйцо) или basket (корзинка).
-; free: yes — бесплатный; без этого свойства питомец платный (покупка или Premium).
-; Нет файла стадии — берётся ближайшая нарисованная (в итоге adult_normal).
-name: CHICK
-order: 3
-birth: egg
