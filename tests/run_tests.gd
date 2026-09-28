@@ -121,11 +121,11 @@ func _adult() -> PetState:
 func test_decay() -> void:
 	var s := _adult()
 	Decay.apply(s, HOUR)
-	check(is_equal_approx(s.satiety, 90) and is_equal_approx(s.happiness, 92) and is_equal_approx(s.energy, 94), "час днём взрослого")
+	check(is_equal_approx(s.satiety, 94) and is_equal_approx(s.happiness, 92) and is_equal_approx(s.energy, 90), "час днём взрослого")
 	s = _adult()
 	s.stage = "baby"
 	Decay.apply(s, HOUR)
-	check(is_equal_approx(s.satiety, 85), "малыш −15 сытости")
+	check(is_equal_approx(s.satiety, 91), "малыш −9 сытости")
 	s = _adult()
 	Decay.apply(s, 5 * HOUR + 60)
 	check(s.poops == 1, "кучка через 5 часов")

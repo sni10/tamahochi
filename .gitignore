@@ -15,3 +15,7 @@ player.json
 /.claude/
 /godot/.godot/
 /.godot/
+
+# Сборки APK
+/build/
+/android/

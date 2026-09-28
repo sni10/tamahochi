@@ -51,35 +51,37 @@ func _parse_args() -> Dictionary:
 
 
 func _build_ui() -> void:
+	# Корпус масштабируется от ширины экрана (база — окно ПК 540 px): на телефоне 1440 px кнопки иначе крошечные.
+	var k := maxf(1.0, get_viewport_rect().size.x / 540.0)
 	var bg := ColorRect.new()
 	bg.color = SHELL
 	bg.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(bg)
 	var box := VBoxContainer.new()
-	box.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, 16)
-	box.add_theme_constant_override("separation", 12)
+	box.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, roundi(16 * k))
+	box.add_theme_constant_override("separation", roundi(12 * k))
 	add_child(box)
 	lcd = Lcd.new()
 	lcd.size_flags_vertical = SIZE_EXPAND_FILL
 	box.add_child(lcd)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 40)
+	row.add_theme_constant_override("separation", roundi(40 * k))
 	box.add_child(row)
 	for key in ["a", "b", "c"]:
-		row.add_child(_make_button(key))
+		row.add_child(_make_button(key, k))
 
 
-func _make_button(key: String) -> Control:
+func _make_button(key: String, k: float) -> Control:
 	var col := VBoxContainer.new()
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(72, 72)
+	b.custom_minimum_size = Vector2.ONE * roundi(72 * k)
 	b.focus_mode = FOCUS_NONE
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = BUTTON_PRESSED if st == "pressed" else BUTTON
-		sb.set_corner_radius_all(36)
-		sb.set_border_width_all(3)
+		sb.set_corner_radius_all(roundi(36 * k))
+		sb.set_border_width_all(roundi(3 * k))
 		sb.border_color = BEZEL
 		b.add_theme_stylebox_override(st, sb)
 	b.pressed.connect(_press.bind("press_" + key))  # срабатывает при отпускании
@@ -88,7 +90,7 @@ func _make_button(key: String) -> Control:
 	label.text = key.to_upper()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_color_override("font_color", BEZEL)
-	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_font_size_override("font_size", roundi(22 * k))
 	col.add_child(label)
 	return col
 

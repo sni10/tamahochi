@@ -6,12 +6,12 @@ class_name Decay
 const HOUR := 3600.0
 const STEP := 60.0
 
-const SATIETY_AWAKE := -10.0
+const SATIETY_AWAKE := -6.0
 const SATIETY_ASLEEP := -4.0
 const SATIETY_NIGHT := -1.0
 const HAPPINESS_AWAKE := -8.0
 const HAPPINESS_ASLEEP := -2.0
-const ENERGY_AWAKE := -6.0
+const ENERGY_AWAKE := -10.0
 const ENERGY_ASLEEP := 25.0
 
 const STARVING_DAMAGE := 12.0
