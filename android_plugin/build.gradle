@@ -1,0 +1,37 @@
+// Плагин Godot (Android plugin v2): локальные уведомления «зов игрока».
+// Версии — как у Gradle-шаблона Godot 4.7.2 (android/build/config.gradle).
+plugins {
+    id 'com.android.library' version '8.6.1'
+    id 'org.jetbrains.kotlin.android' version '2.1.21'
+}
+
+android {
+    namespace 'com.sni10.tamahochi.notify'
+    compileSdk 36
+    defaultConfig {
+        minSdk 24
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    compileOnly 'org.godotengine:godot:4.7.2.stable'
+    implementation 'androidx.core:core:1.13.1'  // та же версия — в addons/tamahochi_notify/plugin.gd
+}
+
+// Готовые AAR — в аддон Godot, откуда их берёт экспорт (addons/tamahochi_notify/bin, не в git).
+tasks.register('copyAarToAddon', Copy) {
+    from layout.buildDirectory.dir('outputs/aar')
+    include '*.aar'
+    into '../addons/tamahochi_notify/bin'
+}
+afterEvaluate {
+    tasks.named('assembleDebug') { finalizedBy 'copyAarToAddon' }
+    tasks.named('assembleRelease') { finalizedBy 'copyAarToAddon' }
+}
