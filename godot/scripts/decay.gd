@@ -23,7 +23,7 @@ const DIGESTION_RATE := 20.0
 const MAX_POOPS := 3
 const POOP_SADNESS := 3.0
 
-const FEVER_RISE := 4.0
+const FEVER_RISE := ENERGY_ASLEEP / 3  # от 0 до смерти ~12 ч
 const DEADLY_FEVER := 100.0
 
 ## Сдвиг местного времени от UTC в минутах.
@@ -79,7 +79,13 @@ static func _step(s: PetState, seconds: float, night: bool, grow := 1.0) -> void
 		s.digestion += DIGESTION_RATE * Evolution.DIGESTION_FACTOR.get(s.stage, 1.0) * h
 		if s.digestion >= 100:
 			s.digestion -= 100
-			s.poops = mini(MAX_POOPS, s.poops + 1)
+			if s.poops < MAX_POOPS:
+				s.poops += 1
+				# Болезнь — в момент появления последней кучки, а не пока они лежат:
+				# иначе вылеченный, но неубранный питомец заболевает снова через минуту.
+				if s.poops == MAX_POOPS and not s.sick:
+					s.sick = true
+					s.care_mistakes += 1
 		s.happiness = _clamp(s.happiness - POOP_SADNESS * s.poops * h)
 
 		# Ошибки ухода: довели до нуля сытость или счастье, долго не убирали.
@@ -94,11 +100,6 @@ static func _step(s: PetState, seconds: float, night: bool, grow := 1.0) -> void
 				s.dirty_time -= Evolution.DIRTY_MISTAKE_AFTER
 		else:
 			s.dirty_time = 0.0
-
-		# Болезнь: набралось максимум кучек.
-		if s.poops >= MAX_POOPS and not s.sick:
-			s.sick = true
-			s.care_mistakes += 1
 
 	if s.sick:  # болезнь не спит: температура растёт и ночью
 		s.fever = _clamp(s.fever + FEVER_RISE * h)

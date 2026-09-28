@@ -132,24 +132,24 @@
     "expected": {
       "species": "blob",
       "stage": "adult_normal",
-      "age": 54840.0,
-      "care_mistakes": 8,
-      "dirty_time": 840.0,
+      "age": 45060.0,
+      "care_mistakes": 7,
+      "dirty_time": 1860.0,
       "satiety": 0.0,
       "happiness": 0.0,
-      "energy": 8.60000000000139,
-      "health": 0.0,
+      "energy": 24.90000000000149,
+      "health": 43.40000000000106,
       "sick": true,
-      "fever": 58.93333333333458,
+      "fever": 100.0,
       "pills_day": "",
       "pills_used": 0,
-      "digestion": 94.6666666666656,
+      "digestion": 40.33333333333253,
       "poops": 3,
       "sleeping": false,
       "alive": false,
       "born_at": 1768471200.0,
       "updated_at": 1768471200.0,
-      "clock": 1768526040.0
+      "clock": 1768516260.0
     }
   },
   "child_to_adult": {

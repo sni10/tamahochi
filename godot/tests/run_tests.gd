@@ -27,6 +27,8 @@ func _initialize() -> void:
 	test_game()
 	test_storage()
 	test_shop()
+	test_calls()
+	test_age()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -155,13 +157,13 @@ func test_decay() -> void:
 	check(s.sick and s.care_mistakes == 1, "третья кучка → болен, +1 ошибка")
 	s = _adult()
 	s.sick = true
-	for hour in 25:  # кормим каждый час — убивает только температура
+	for hour in 12:  # кормим каждый час — убивает только температура
 		check(s.alive, "жив на %d ч болезни" % hour)
 		s.satiety = 100
 		s.happiness = 100
 		Decay.apply(s, HOUR)
-	Decay.apply(s, 60)  # float: 1500 шагов по 4/60 дают 99.99…
-	check(not s.alive and s.fever >= 100, "умер от температуры за ~25 ч")
+	Decay.apply(s, 60)  # float: сумма шагов даёт 99.99…
+	check(not s.alive and s.fever >= 100, "умер от температуры за ~12 ч")
 	s = _adult()
 	s.updated_at = 1000.0
 	Decay.advance(s, 500.0)
@@ -234,6 +236,15 @@ func test_game() -> void:
 	g.state.fever = 8
 	g.press_b()
 	check(g.mode == "heal" and not g.state.sick and g.pills_left() == 4, "таблетка вылечила")
+	g.state.poops = 3
+	g.state.digestion = 0.0
+	Decay.apply(g.state, HOUR)
+	check(not g.state.sick and g.state.fever == 0.0, "вылечен, кучки не убраны — не заболевает снова")
+	g.state.sick = true
+	g.state.fever = 10.0000001
+	g.mode = "bag"
+	g.press_b()
+	check(not g.state.sick and g.state.fever == 0.0, "остаток температуры 1e-7 — тоже вылечен")
 	g.state.pills_day = "2000-01-01"
 	g.state.pills_used = 5
 	check(g.pills_left() == 5, "новый день — снова 5 таблеток")
@@ -314,3 +325,98 @@ func test_shop() -> void:
 	check(Shop.grant(p, Shop.PREMIUM) and p.syringes == 16, "premium")
 	check(not Shop.grant(p, Shop.PREMIUM) and p.syringes == 16, "premium второй раз ничего не даёт")
 	check(Shop.is_unlocked(p, Sprites.PETS.puppy), "premium открывает всех")
+
+
+# --- следующий зов ---
+
+## Местное время 2026-01-15 + hours (с учётом сдвига пояса, как в Decay.local_time).
+func _local(hours: float) -> float:
+	return Time.get_unix_time_from_datetime_dict({"year": 2026, "month": 1, "day": 15, "hour": 0, "minute": 0, "second": 0}) \
+			- Decay.tz_bias * 60 + hours * HOUR
+
+
+func _pet_at(clock: float) -> PetState:
+	var s := _adult()
+	s.clock = clock
+	s.updated_at = clock
+	return s
+
+
+func test_calls() -> void:
+	var s := _pet_at(_local(12))
+	s.satiety = 20
+	s.poops = 1
+	check(Calls.reasons(s) == ["poop", "hungry"], "поводы: сытость 20 + кучка")
+
+	var now := _local(12)
+	s = _pet_at(now)
+	var before := s.to_dict()
+	var c := Calls.next_call(s, [], now)
+	check(absf(c.at - now - 5 * HOUR) <= 60 and c.reasons == ["poop"], "сытый днём → кучка через 5 ч: %s" % [c])
+	check(s.to_dict() == before, "исходное состояние не изменилось")
+
+	s = _pet_at(now)
+	s.digestion = 99.9
+	c = Calls.next_call(s, [], now)
+	check(c.at == now + 60 and c.reasons == ["poop"], "кучка вот-вот → через минуту")
+
+	s = _pet_at(now)
+	s.satiety = 10
+	c = Calls.next_call(s, [22, 8], now)
+	check(c.at == now and c.reasons == ["hungry"], "повод уже есть → сейчас")
+
+	s = _pet_at(now)
+	s.alive = false
+	c = Calls.next_call(s, [22, 8], now)
+	check(c.at == now and c.reasons == ["dead"], "мёртв → сейчас")
+
+	# 23:00, питомца разбудили: пищеварение идёт, кучка к 02:00 — зов ждёт 08:00.
+	now = _local(23)
+	s = _pet_at(now)
+	s.digestion = 40
+	c = Calls.next_call(s, [], now)
+	check(absf(c.at - _local(26)) <= 60, "без тихих часов кучка в 02:00: %s" % [c])
+	c = Calls.next_call(s, [22, 8], now)
+	check(absf(c.at - _local(32)) <= 60 and "poop" in c.reasons, "кучка ночью → зов в 08:00: %s" % [c])
+
+	s = _pet_at(now)
+	s.poops = 1
+	s.sleeping = true
+	c = Calls.next_call(s, [22, 8], now)
+	check(c.at == _local(32) and "poop" in c.reasons, "кучка в 23:00 → зов в 08:00")
+
+
+# --- возраст на экране ---
+
+func _corner(lcd: Lcd) -> PackedByteArray:
+	var out := PackedByteArray()
+	for y in range(Game.PLAY_Y + 1, Game.PLAY_Y + 9):
+		for x in 40:
+			out.append(lcd.buf[y * Lcd.COLS + x])
+	return out
+
+
+func test_age() -> void:
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	var g := Game.new(_adult())
+	g.state.age = 3 * 86400 + 5 * HOUR
+	g.render(lcd)
+	g.draw_text(clean, "AGE 3", Game.PLAY_Y + 2, 2)
+	check(_corner(lcd) == _corner(clean), "AGE 3 в углу комнаты")
+	g.state.age = 100
+	g.state.stage = "baby"
+	g.render(lcd)
+	clean.clear()
+	g.draw_text(clean, "AGE 0", Game.PLAY_Y + 2, 2)
+	check(_corner(lcd) == _corner(clean), "AGE 0 в первый день")
+	clean.clear()
+	g.state.stage = "birth"
+	g.render(lcd)
+	check(_corner(lcd) == _corner(clean), "в яйце возраста нет")
+	g.state.stage = "adult_normal"
+	g.mode = "dead"
+	g.render(lcd)
+	check(_corner(lcd) == _corner(clean), "после смерти возраста нет")
+	lcd.free()
+	clean.free()

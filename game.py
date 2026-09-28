@@ -301,8 +301,8 @@ class Game:
                 s.pills_day, s.pills_used = self._pill_day(), 0
             s.pills_used += 1
             s.fever = max(0.0, s.fever - PILL_FEVER)
-            if s.fever <= 0:
-                s.sick = False  # вылечили
+            if s.fever < 1:  # не сравниваем с нулём: температура копится дробями, остаток 1e-7 не болезнь
+                s.sick, s.fever = False, 0.0  # вылечили
         elif self.bag_item == SYRINGE:
             if not self.profile.syringes:
                 self._set_mode("no")

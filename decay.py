@@ -34,7 +34,7 @@ POOP_SADNESS = 3.0      # неубранная кучка портит наст�
 
 # Болезнь: заболевает, как только набралось MAX_POOPS кучек; дальше температура растёт,
 # пока не вылечат (таблетки, шприц) — или пока не умрёт.
-FEVER_RISE = 4.0        # рост температуры у больного в час — от 0 до смерти ~25 часов
+FEVER_RISE = ENERGY_ASLEEP / 3  # рост температуры у больного в час — от 0 до смерти ~12 часов
 DEADLY_FEVER = 100.0
 
 Quiet = tuple[int, int] | None  # тихие часы (с, до) в часах суток; None — ночи нет
@@ -81,7 +81,13 @@ def _step(s: PetState, seconds: float, night: bool, grow: float = 1.0) -> None:
         s.digestion += DIGESTION_RATE * evolution.DIGESTION_FACTOR.get(s.stage, 1.0) * h
         if s.digestion >= 100:
             s.digestion -= 100
-            s.poops = min(MAX_POOPS, s.poops + 1)
+            if s.poops < MAX_POOPS:
+                s.poops += 1
+                # Болезнь — в момент появления последней кучки, а не пока они лежат:
+                # иначе вылеченный, но неубранный питомец заболевает снова через минуту.
+                if s.poops == MAX_POOPS and not s.sick:
+                    s.sick = True
+                    s.care_mistakes += 1
         s.happiness = _clamp(s.happiness - POOP_SADNESS * s.poops * h)
 
         # Ошибки ухода: довели до нуля сытость или счастье, долго не убирали.
@@ -96,11 +102,6 @@ def _step(s: PetState, seconds: float, night: bool, grow: float = 1.0) -> None:
                 s.dirty_time -= evolution.DIRTY_MISTAKE_AFTER
         else:
             s.dirty_time = 0.0
-
-        # Болезнь: набралось максимум кучек.
-        if s.poops >= MAX_POOPS and not s.sick:
-            s.sick = True
-            s.care_mistakes += 1
 
     if s.sick:  # болезнь не спит: температура растёт и ночью
         s.fever = _clamp(s.fever + FEVER_RISE * h)

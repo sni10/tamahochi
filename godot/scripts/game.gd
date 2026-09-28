@@ -319,8 +319,9 @@ func _use_bag_item() -> void:
 			s.pills_used = 0
 		s.pills_used += 1
 		s.fever = maxf(0.0, s.fever - PILL_FEVER)
-		if s.fever <= 0:
+		if s.fever < 1:  # не сравниваем с нулём: температура копится дробями, остаток 1e-7 не болезнь
 			s.sick = false  # вылечили
+			s.fever = 0.0
 	elif bag_item == SYRINGE:
 		if not profile.syringes:
 			_set_mode("no")
@@ -351,6 +352,8 @@ func render(lcd: Lcd) -> void:
 		lcd.flush()
 		return
 	_draw_status(lcd)
+	if mode != "dead" and not _is_birth():
+		draw_text(lcd, "AGE %d" % floori(state.age / 86400), PLAY_Y + 2, 2)
 	call("_draw_" + mode, lcd)
 	if mode != "clean":
 		_draw_poops(lcd, state.poops)
