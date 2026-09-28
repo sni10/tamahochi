@@ -28,6 +28,7 @@ static var ICON_SETTINGS: Sprite
 static var ICON_BAG: Sprite
 static var ITEM_PILL: Sprite
 static var ITEM_SYRINGE: Sprite
+static var ITEM_UMBRELLA: Sprite
 static var MINI_FEVER: Sprite
 static var SICK: Sprite
 static var LOCK: Sprite
@@ -51,6 +52,7 @@ static var Z_SMALL: Sprite
 static var GHOST: Sprite
 static var RAIN_CLOUD: Sprite
 static var RAIN: Array  # два кадра плитки капель
+static var UMBRELLA: Sprite
 
 
 class Sprite:
@@ -282,6 +284,7 @@ static func _static_init() -> void:
 	ICON_BAG = _require(ui, "icon_bag", "ui.txt")
 	ITEM_PILL = _require(ui, "item_pill", "ui.txt")
 	ITEM_SYRINGE = _require(ui, "item_syringe", "ui.txt")
+	ITEM_UMBRELLA = _require(ui, "item_umbrella", "ui.txt")
 	MINI_FEVER = _require(ui, "mini_fever", "ui.txt")
 	SICK = _require(ui, "sick", "ui.txt")
 	LOCK = _require(ui, "lock", "ui.txt")
@@ -305,3 +308,4 @@ static func _static_init() -> void:
 	GHOST = _require(world, "ghost", "world.txt")
 	RAIN_CLOUD = _require(world, "rain_cloud", "world.txt")
 	RAIN = [_require(world, "rain1", "world.txt"), _require(world, "rain2", "world.txt")]
+	UMBRELLA = _require(world, "umbrella", "world.txt")

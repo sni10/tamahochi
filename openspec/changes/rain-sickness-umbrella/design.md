@@ -21,7 +21,7 @@
 `""` — ещё не решено, `"umbrella"` — раскрыт, `"none"` — без защиты. В `_step`: вне дождя → `""` (вместе с `rain_loss = 0`). В первую минуту дождя при `""` (спит питомец или нет): есть зонтик → `profile.umbrellas -= 1`, `"umbrella"`; иначе `"none"`, и если `infects` и питомец здоров → болезнь + ошибка ухода. Под `"umbrella"` добавочная потеря счастья не начисляется. Поле сохраняется в `save.json` (перезапуск не тратит второй зонтик), старые сохранения читаются с `""`.
 
 ### D4. Отрисовка зонтика
-Спрайт `umbrella` (~16×9: купол и ручка) в `assets/world.txt`, рисуется по центру над питомцем (`x + (w - umbrella.w) / 2`, `y - umbrella.h - 1`) в `_draw_pet` при `is_rain && rain_cover == "umbrella"` — следует за прогулкой, во сне и в анимациях — над `_home_x`. Иконка `item_umbrella` 12×12 в `assets/ui.txt` для сумки.
+Спрайт `umbrella` (21×11: сплошной купол — капли за ним не видны, — и ручка) в `assets/world.txt`, рисуется по центру над питомцем (`x + (w - umbrella.w) / 2`, `y - umbrella.h - 1`) в `_draw_pet` при `is_rain && rain_cover == "umbrella"` — следует за прогулкой, во сне и в анимациях — над `_home_x`. Иконка `item_umbrella` 12×12 в `assets/ui.txt` для сумки.
 
 ### D5. Сумка и магазин
 `BAG_NAMES`: PILL, SYRINGE, UMBRELLA, SETTINGS (UMBRELLA — перед настройками). B на UMBRELLA — `"no"`. `Shop.grant`: `ad_umbrella` +1; `syringe_pack` и `premium` дополнительно +5 / +10 зонтиков. `Profile.umbrellas` — новое поле, по умолчанию 0. Отладочная клавиша `5` → `ad_umbrella`.

@@ -31,6 +31,8 @@ func _initialize() -> void:
 	test_weather()
 	test_rain()
 	test_rain_sky()
+	test_umbrella()
+	test_umbrella_screens()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -538,3 +540,128 @@ func test_rain_sky() -> void:
 	lcd.free()
 	clean.free()
 	Weather.enabled = false
+
+
+# --- болезнь от дождя и зонтик ---
+
+func _umbrellas(n: int) -> Storage.Profile:
+	var p := Storage.Profile.new()
+	p.umbrellas = n
+	return p
+
+
+func test_umbrella() -> void:
+	check(Storage.Profile.from_dict({"syringes": 1}).umbrellas == 0, "старый player.json без зонтиков → 0")
+	check(Storage.Profile.from_dict(_umbrellas(4).to_dict()).umbrellas == 4, "зонтики сохраняются в профиле")
+	check(PetState.from_dict({"stage": "adult_normal"}).rain_cover == "", "старый save.json → rain_cover пуст")
+	var st := _adult()
+	st.rain_cover = "umbrella"
+	check(PetState.from_dict(st.to_dict()).rain_cover == "umbrella", "rain_cover сохраняется")
+
+	Weather.enabled = true
+	var wet := _rain_day(2, true)   # заражающий дождь не короче 2 ч (проверки идут внутри дождя)
+	var dry := _rain_day(1, false)  # незаражающий
+	var start := _at(wet[0], wet[1])
+
+	var s := _pet_at(start)
+	var p := _umbrellas(2)
+	Decay.apply(s, HOUR, [], 1.0, p)
+	check(p.umbrellas == 1 and s.rain_cover == "umbrella", "зонтик раскрылся сам: 2 → 1")
+	check(not s.sick and is_equal_approx(s.happiness, 92), "под зонтиком: здоров, счастье обычное (%s)" % s.happiness)
+	s = PetState.from_dict(s.to_dict())  # «перезапуск» посреди дождя
+	Decay.apply(s, 10 * 60, [], 1.0, p)
+	check(p.umbrellas == 1, "перезапуск посреди дождя — второй зонтик не тратится")
+
+	s = _pet_at(start)
+	Decay.apply(s, 60, [], 1.0, _umbrellas(0))
+	check(s.sick and s.care_mistakes == 1 and s.rain_cover == "none", "заражающий дождь без зонтика → болен, +1 ошибка")
+	Decay.apply(s, HOUR)
+	check(s.care_mistakes == 1, "за один дождь — одна ошибка")
+
+	s = _pet_at(_at(dry[0], dry[1]))
+	Decay.apply(s, HOUR, [], 1.0, _umbrellas(0))
+	check(not s.sick, "незаражающий дождь — здоров")
+
+	s = _pet_at(start)
+	s.sleeping = true
+	p = _umbrellas(1)
+	Decay.apply(s, HOUR, [0, 23], 1.0, p)
+	check(p.umbrellas == 0 and not s.sick and s.happiness == 100.0, "дождь во сне: зонтик раскрылся сразу, не заразился")
+	s = _pet_at(start)
+	s.sleeping = true
+	Decay.apply(s, HOUR, [0, 23], 1.0, _umbrellas(0))
+	check(s.sick and s.care_mistakes == 1, "заражающий дождь во сне без зонтика → болен")
+
+	s = _pet_at(start)
+	s.sick = true
+	s.fever = 20
+	Decay.apply(s, HOUR, [], 1.0, _umbrellas(0))
+	check(s.care_mistakes == 0, "уже больной — ошибку за дождь не получает")
+
+	s = _pet_at(start)
+	Decay.apply(s, 4 * HOUR, [], 1.0, _umbrellas(1))
+	check(s.rain_cover == "", "после дождя защита сбрасывается")
+
+	# Расчёт зова видит болезнь от дождя и не трогает настоящий профиль.
+	s = _pet_at(start - HOUR)
+	p = _umbrellas(0)
+	var c := Calls.next_call(s, [], start - HOUR, p)
+	check(absf(c.at - start - 60) <= 60 and "sick" in c.reasons, "next_call: заболеет в начале дождя: %s" % [c])
+	p = _umbrellas(1)
+	c = Calls.next_call(s, [], start - HOUR, p)
+	check(not ("sick" in c.reasons) and p.umbrellas == 1, "next_call с зонтиком: не болеет, настоящий профиль не тронут")
+
+	# Живой тик тратит зонтик и просит сохранить профиль.
+	var g := Game.new(_pet_at(start), 1.0, null, 1.0, _umbrellas(3))
+	g.tick(start + 120)
+	check(g.profile.umbrellas == 2 and g.profile_changed, "тик: зонтик раскрылся, профиль помечен к сохранению")
+	Weather.enabled = false
+
+
+func test_umbrella_screens() -> void:
+	check(Sprites.UMBRELLA != null and Sprites.ITEM_UMBRELLA != null and Sprites.ITEM_UMBRELLA.w == 12, "спрайты зонтика загружены")
+	Weather.enabled = true
+	var rd := _rain_day(2)
+	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 0.5)))
+	g.state.rain_cover = "none"
+	var bare := _render(g, 0)
+	g.state.rain_cover = "umbrella"
+	var covered := _render(g, 0)
+	var lk := g.look()
+	var head_y := Game.GROUND - lk.h
+	var differs := false
+	for y in range(head_y - Sprites.UMBRELLA.h - 1, head_y):
+		for x in Lcd.COLS:
+			differs = differs or covered[y * Lcd.COLS + x] != bare[y * Lcd.COLS + x]
+	check(differs, "в дождь с раскрытым зонтиком над питомцем появляется зонтик")
+	var below_same := true
+	for i in range(head_y * Lcd.COLS, Game.GROUND * Lcd.COLS):
+		below_same = below_same and covered[i] == bare[i]
+	check(below_same, "зонтик не задевает самого питомца")
+	g.state.clock = _at(rd[0], 3)  # солнце: зонтик не рисуется, даже если поле не сброшено
+	check(_render(g, 0) == _render(Game.new(_pet_at(_at(rd[0], 3))), 0), "без дождя зонтика нет")
+	Weather.enabled = false
+
+	g = Game.new(_adult(), 1.0, null, 1.0, _umbrellas(3))
+	g.mode = "bag"
+	g.bag_item = Game.UMBRELLA
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.render(lcd)
+	g.draw_text(clean, "UMBRELLA", 84)
+	g.draw_text(clean, "X 3", 96)
+	var shown := true
+	for y in range(84, 101):
+		for x in Lcd.COLS:
+			shown = shown and (not clean.get_px(x, y) or lcd.get_px(x, y))
+	check(shown, "сумка: UMBRELLA и X 3")
+	g.press_b()
+	check(g.mode == "no" and g.profile.umbrellas == 3, "B на зонтике — отказ, запас не меняется")
+	lcd.free()
+	clean.free()
+
+	var p := Storage.Profile.new()
+	check(Shop.grant(p, Shop.AD_UMBRELLA) and p.umbrellas == 1, "ad_umbrella: +1")
+	check(Shop.grant(p, Shop.SYRINGE_PACK) and p.umbrellas == 6, "syringe_pack: +5 зонтиков")
+	check(Shop.grant(p, Shop.PREMIUM) and p.umbrellas == 16, "premium: +10 зонтиков")
+	check(not Shop.grant(p, Shop.PREMIUM) and p.umbrellas == 16, "повторный premium — без зонтиков")

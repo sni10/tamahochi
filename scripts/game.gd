@@ -36,8 +36,8 @@ const DOTS_Y := 25
 
 enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
-enum { PILL, SYRINGE, BAG_SETTINGS }
-const BAG_NAMES := ["PILL", "SYRINGE", "SETTINGS"]
+enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS }
+const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS"]
 const FREE_PILLS_PER_DAY := 5
 const PILL_FEVER := 10.0
 
@@ -106,7 +106,7 @@ func _icons() -> Array:
 
 
 func _bag_icons() -> Array:
-	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ICON_SETTINGS]
+	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS]
 
 
 func _is_birth() -> bool:
@@ -141,7 +141,10 @@ func tick(now := Time.get_unix_time_from_system()) -> void:
 	if mode == "select":
 		return
 	var stage_before := state.stage
-	Decay.advance(state, now, speed, settings.quiet(), grow)
+	var umbrellas_before := profile.umbrellas
+	Decay.advance(state, now, speed, settings.quiet(), grow, profile)
+	if profile.umbrellas != umbrellas_before:
+		profile_changed = true  # зонтик раскрылся сам — main.gd сохранит профиль
 	pet_x = mini(pet_x, _max_pet_x())
 	if not state.alive:
 		if mode != "dead":
@@ -309,6 +312,9 @@ func _use_bag_item() -> void:
 		settings_field = 0
 		_set_mode("settings")
 		return
+	if bag_item == UMBRELLA:
+		_set_mode("no")  # зонтик раскрывается сам в начале дождя — вручную нечего применять
+		return
 	if _is_birth():
 		_set_mode("idle")
 		return
@@ -459,6 +465,7 @@ func _draw_pet(lcd: Lcd, x: int) -> void:
 		return
 	var lk := look()
 	var y := _y_for(lk.h)
+	_draw_umbrella(lcd, x, y, lk.w)
 	if s.sleeping:
 		lcd.blit(lk.sleep, x, y)
 		if frame % 2:
@@ -471,6 +478,13 @@ func _draw_pet(lcd: Lcd, x: int) -> void:
 	lcd.blit(frames[frame % 2], x, y, pet_dir < 0)
 	if s.sick and frame % 2:  # череп над головой больного
 		lcd.blit(Sprites.SICK, x + lk.w - 3, y - Sprites.SICK.h - 2)
+
+
+## Зонтик над питомцем, пока он раскрыт на текущий дождь.
+func _draw_umbrella(lcd: Lcd, x: int, y: int, w: int) -> void:
+	if state.rain_cover == "umbrella" and Weather.is_rain(state.clock):
+		var u := Sprites.UMBRELLA
+		lcd.blit(u, x + (w - u.w) / 2, y - u.h - 1, false, PLAY_AREA)
 
 
 func _draw_birth(lcd: Lcd) -> void:
@@ -503,6 +517,7 @@ func _draw_eat(lcd: Lcd) -> void:
 	var lk := look()
 	var x := maxi(0, food_x - lk.w - 2)
 	lcd.blit(lk.eat[mode_ticks % 2], x, _y_for(lk.h))
+	_draw_umbrella(lcd, x, _y_for(lk.h), lk.w)
 	var bites := mode_ticks / 2
 	if bites < 4:
 		var food := Sprites.FOOD.cropped(Sprites.FOOD.w - bites * 3)
@@ -512,11 +527,13 @@ func _draw_eat(lcd: Lcd) -> void:
 func _draw_play(lcd: Lcd) -> void:
 	var jump := 8 if mode_ticks % 2 else 0
 	lcd.blit(look().happy, _home_x(), _y_for(look().h) - jump, false, PLAY_AREA)
+	_draw_umbrella(lcd, _home_x(), _y_for(look().h) - jump, look().w)
 
 
 func _draw_no(lcd: Lcd) -> void:
 	var shake := 2 if mode_ticks % 2 else -2
 	lcd.blit(look().sad[0], maxi(0, _home_x() + shake), _y_for(look().h))
+	_draw_umbrella(lcd, maxi(0, _home_x() + shake), _y_for(look().h), look().w)
 
 
 func _draw_clean(lcd: Lcd) -> void:
@@ -541,6 +558,7 @@ func _draw_heal(lcd: Lcd) -> void:
 	var x := _home_x()
 	var y := _y_for(lk.h)
 	lcd.blit(lk.happy, x, y)
+	_draw_umbrella(lcd, x, y, lk.w)
 	var plus: Sprites.Sprite = Sprites.FONT["+"]
 	var spots := [[-5, 4], [lk.w + 2, 8], [-3, 16], [lk.w, 0]]
 	for i in spots.size():
@@ -635,6 +653,12 @@ func _draw_bag(lcd: Lcd) -> void:
 		draw_text(lcd, "FREE %d/%d" % [pills_left(), FREE_PILLS_PER_DAY], 96)
 	elif bag_item == SYRINGE:
 		draw_text(lcd, "X %d" % profile.syringes, 96)
+	elif bag_item == UMBRELLA:
+		draw_text(lcd, "X %d" % profile.umbrellas, 96)
+	if bag_item == UMBRELLA:  # раскрывается сам — применять нечего
+		draw_text(lcd, "A NEXT", ICON_Y)
+		draw_text(lcd, "C BACK", ICON_Y + 9)
+		return
 	var action := "OPEN" if bag_item == BAG_SETTINGS else "USE"
 	draw_text(lcd, "A NEXT  B %s" % action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)
