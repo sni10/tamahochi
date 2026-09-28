@@ -10,11 +10,11 @@
 ## Decisions
 
 ### D1. Плагин Godot Android v2 в `android_plugin/`
-Отдельный Gradle-проект библиотеки: класс `TamahochiNotifyPlugin : GodotPlugin`, `getPluginName() = "TamahochiNotify"`, методы `@UsedByGodot schedule(atSec: Long, title: String, body: String)` и `cancel()`. Зависимость `compileOnly("org.godotengine:godot:4.7.2.stable")` (Maven Central) и `androidx.core:core`. Регистрация — `<meta-data android:name="org.godotengine.plugin.v2.TamahochiNotify" android:value="...TamahochiNotifyPlugin"/>` в манифесте библиотеки. Gradle-обёртка — своя (8.11.1), версии — как у шаблона Godot.
+Отдельный Gradle-проект библиотеки: класс `TamahochiNotifyPlugin : GodotPlugin`, `getPluginName() = "TamahochiNotify"`, методы `@UsedByGodot schedule(atSec: Long, title: String, body: String)` и `cancel()`. Зависимость `compileOnly("org.godotengine:godot:4.7.2.stable")` (Maven Central, проверено: последняя версия — 4.7.2.stable) и `androidx.core:core`. Регистрация — `<meta-data android:name="org.godotengine.plugin.v2.TamahochiNotify" android:value="...TamahochiNotifyPlugin"/>` в манифесте библиотеки. Gradle-обёртка — своя (8.11.1), версии — как у шаблона Godot.
 *Альтернатива:* сторонний плагин уведомлений — зависимость от чужого кода и его совместимости с 4.7; своих ~150 строк проще.
 
 ### D2. Будильник и показ
-`AlarmManager.setAndAllowWhileIdle(RTC_WAKEUP, atMs, pi)` — неточный, без разрешения на точные будильники. `PendingIntent` на `CallReceiver` (`BroadcastReceiver`, не экспортируется) с заголовком и текстом в extras, `FLAG_IMMUTABLE | FLAG_UPDATE_CURRENT` и один requestCode — новый зов заменяет прежний. Receiver показывает уведомление через `NotificationCompat` в канале `calls` (создаётся при первом показе), маленькая иконка — векторный drawable в ресурсах плагина, `contentIntent` — `getLaunchIntentForPackage`, `setAutoCancel(true)`. `cancel()` — `alarmManager.cancel(pi)` + `NotificationManagerCompat.cancel(id)` + очистка сохранённого зова.
+`AlarmManager.setAndAllowWhileIdle(RTC_WAKEUP, atMs, pi)` — неточный, без разрешения на точные будильники. `PendingIntent` на `CallReceiver` (`BroadcastReceiver`, не экспортируется) с заголовком и текстом в extras, `FLAG_IMMUTABLE | FLAG_UPDATE_CURRENT` и один requestCode — новый зов заменяет прежний. Receiver показывает уведомление через `NotificationCompat` в канале `calls` (создаётся при первом показе, важность `IMPORTANCE_HIGH` — всплывает баннером сверху экрана, со звуком, и остаётся в шторке), маленькая иконка — векторный drawable в ресурсах плагина, `contentIntent` — `getLaunchIntentForPackage`, `setAutoCancel(true)`. `cancel()` — `alarmManager.cancel(pi)` + `NotificationManagerCompat.cancel(id)` + очистка сохранённого зова.
 
 ### D3. Перезагрузка
 `schedule` сохраняет момент/заголовок/текст в `SharedPreferences`; `BootReceiver` (`BOOT_COMPLETED`, разрешение `RECEIVE_BOOT_COMPLETED`) перепланирует сохранённый зов, прошедший — показывает сразу. После показа запись удаляется.
@@ -27,6 +27,5 @@
 
 ## Risks / Trade-offs
 
-- [Производители (Xiaomi, Huawei) убивают будильники фоновых приложений] → неточный будильник — стандартный путь; в доке упомянуть «разрешить автозапуск», если на конкретном телефоне не приходит.
-- [Maven-артефакт `org.godotengine:godot:4.7.2.stable` может называться иначе] → проверить на первой сборке; запасной путь — `godot-lib.template_release.aar` из `android/build/libs` как `compileOnly(files(...))`.
+- [Производители (Xiaomi, Huawei) убивают будильники фоновых приложений] → в игре ничего не просим: неточный будильник через `AlarmManager` — стандартный путь, на большинстве телефонов работает. Подсказку «уведомления не приходят? разрешите автозапуск» — в описание в Google Play / FAQ (B.6) и, возможно, на экран настроек (B.3), только если на реальных тестерах всплывёт.
 - [Проверка на эмуляторе требует ждать ~15 мин реального времени (зов с поводом «уже есть»)] → ждём в фоне; отладочных сокращений в код не добавляем.
