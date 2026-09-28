@@ -12,3 +12,6 @@ save.json
 *.tmp
 settings.json
 player.json
+/.claude/
+/godot/.godot/
+/.godot/
