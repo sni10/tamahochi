@@ -130,6 +130,18 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
 5. Сохранение в `user://save.json`, догонялка офлайн-времени при запуске.
 6. Проверка: одинаковые сценарии в прототипе и на Android дают одинаковое состояние.
 
+### Релизы (CI)
+
+- `.github/workflows/release.yml`: на каждый PR и push в `main` — автотесты (`tests/run_tests.gd`);
+  на push в `main` (merge) при зелёных тестах — GitHub Release: тег = последний `vX.Y.Z` с Z+1,
+  APK `tamahochi-vX.Y.Z.apk` (versionCode = номер прогона CI), исходники GitHub прикладывает сам.
+- APK подписан release-ключом: локально `%USERPROFILE%\.tamahochi\release.keystore` (пароль —
+  `release.keystore.txt` рядом), в GitHub — секреты `ANDROID_KEYSTORE_BASE64/ALIAS/PASSWORD`.
+- **Ключ терять нельзя**: без него новые версии не встанут поверх старых (и в Google Play тоже).
+  Копия — вне компьютера.
+- Отладочные сборки (`--export-debug`) подписаны другим ключом: чтобы перейти на релизную, старую
+  сборку нужно удалить (питомец пропадёт) — один раз.
+
 ## B.2 Push-уведомления — «зов игрока»
 
 Простое уведомление о событии в игре: «CAT is hungry!», «Time to clean up!».
