@@ -29,6 +29,8 @@ func _ready() -> void:
 	var state := Storage.load_pet()  # null — новая игра, начнём с выбора питомца
 	var stage_before := state.stage if state else ""
 	if state:  # догоняем время, пока программа была закрыта (зонтики раскрываются и офлайн)
+		Notifier.cancel()
+		Calls.punish_ignored(state, settings.quiet(), Time.get_unix_time_from_system())  # до досчёта времени
 		var umbrellas_before := profile.umbrellas
 		Decay.advance(state, Time.get_unix_time_from_system(), 1.0, settings.quiet(), 1.0, profile)
 		if profile.umbrellas != umbrellas_before:
@@ -149,5 +151,29 @@ func _save() -> void:
 
 
 func _notification(what: int) -> void:
-	if game and what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST]:
-		_save()
+	if not game:
+		return
+	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST]:
+		_leave()
+	elif what in [NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN]:
+		_come_back()
+
+
+## Игрок уходит: запланировать зов (если есть живой питомец) и сохранить.
+func _leave() -> void:
+	if game.savable():
+		var n := Calls.plan(game.state, game.settings.quiet(), Time.get_unix_time_from_system(), game.profile, game.skin().name)
+		game.state.pending_call_at = n.get("at", 0.0)
+		if n:
+			Notifier.schedule(n.at, n.title, n.body)
+		else:
+			Notifier.cancel()
+	_save()
+
+
+## Игрок вернулся: отменить зов, оштрафовать за проигнорированный — до досчёта времени (он в ближайшем тике).
+func _come_back() -> void:
+	Notifier.cancel()
+	if game.savable():
+		Calls.punish_ignored(game.state, game.settings.quiet(), Time.get_unix_time_from_system())
+		Storage.save_pet(game.state)
