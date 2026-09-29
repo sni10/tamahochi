@@ -38,8 +38,9 @@ enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
 enum { FIELD_FROM, FIELD_TO, FIELD_CALLS, FIELD_SOUND }
 const SETTINGS_FIELDS := 4
-enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT }
-const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT"]
+enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT, BAG_TIME }
+const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT", "TIME"]  # TIME — только tester
+const TIME_SPEEDS := [1.0, 10.0, 60.0, 600.0]
 const FEEDBACK_EMAIL := "d.strelets.a@gmail.com"
 const FREE_PILLS_PER_DAY := 5
 const PILL_FEVER := 10.0
@@ -65,6 +66,7 @@ var settings: Storage.Settings
 var settings_field := 0          # поле экрана настроек: FIELD_FROM … FIELD_SOUND
 var settings_note := ""          # короткая надпись на экране настроек (NOT HERE), до следующего нажатия
 var open_notify_settings_wanted := false  # main.gd открывает системные настройки уведомлений
+var tester := false  # тестовая сборка: в сумке есть TIME (main.gd)
 var feedback_wanted := false  # main.gd открывает письмо разработчику (feedback_mailto)
 var settings_changed := false    # main.gd сохраняет настройки и сбрасывает флаг
 var profile: Storage.Profile
@@ -114,7 +116,7 @@ func _icons() -> Array:
 
 
 func _bag_icons() -> Array:
-	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT]
+	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT, Sprites.ICON_TIME]
 
 
 func _is_birth() -> bool:
@@ -226,7 +228,7 @@ func press_a() -> void:
 		settings_note = ""
 		return
 	if mode == "bag":
-		bag_item = (bag_item + 1) % BAG_NAMES.size()
+		bag_item = (bag_item + 1) % (BAG_NAMES.size() if tester else BAG_TIME)
 		return
 	if mode == "dead" or _busy():
 		return
@@ -353,6 +355,11 @@ func _use_bag_item() -> void:
 	if bag_item == BAG_ABOUT:
 		_set_mode("about")
 		return
+	if bag_item == BAG_TIME:  # следующая скорость по кругу; нестандартная (--speed) → ×1
+		speed = TIME_SPEEDS[(TIME_SPEEDS.find(speed) + 1) % TIME_SPEEDS.size()]
+		settings.time_speed = speed
+		settings_changed = true
+		return
 	if bag_item == UMBRELLA:
 		_set_mode("no")  # зонтик раскрывается сам в начале дождя — вручную нечего применять
 		return
@@ -408,6 +415,8 @@ func render(lcd: Lcd) -> void:
 	_draw_status(lcd)
 	if mode != "dead" and not _is_birth():
 		draw_text(lcd, "AGE %d" % floori(state.age / 86400), PLAY_Y + 2, 2)
+	if speed != 1.0:  # тестовое ускорение времени — чтобы не забыть, что оно включено
+		draw_text(lcd, "X%d" % speed, PLAY_Y + 9, 2)
 	call("_draw_" + mode, lcd)
 	if mode != "clean":
 		_draw_poops(lcd, state.poops)
@@ -739,10 +748,12 @@ func _draw_bag(lcd: Lcd) -> void:
 		draw_text(lcd, "X %d" % profile.syringes, 96)
 	elif bag_item == UMBRELLA:
 		draw_text(lcd, "X %d" % profile.umbrellas, 96)
+	elif bag_item == BAG_TIME:
+		draw_text(lcd, "SPEED X%d" % speed, 96)
 	if bag_item == UMBRELLA:  # раскрывается сам — применять нечего
 		draw_text(lcd, "A NEXT", ICON_Y)
 		draw_text(lcd, "C BACK", ICON_Y + 9)
 		return
-	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT] else "USE"
+	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT] else "SET" if bag_item == BAG_TIME else "USE"
 	draw_text(lcd, "A NEXT  B %s" % action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)

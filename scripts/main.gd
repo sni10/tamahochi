@@ -36,6 +36,9 @@ func _ready() -> void:
 		if profile.umbrellas != umbrellas_before:
 			Storage.save_profile(profile)
 	game = Game.new(state, args.speed, settings, args.grow, profile)
+	game.tester = OS.is_debug_build() or OS.has_feature("tester")  # метку tester снимаем для продакшена
+	if game.tester and args.speed == 1.0:
+		game.speed = settings.time_speed  # TIME из сумки; действует, пока игра открыта
 	if state and state.alive and state.stage != stage_before:
 		game.start_evolution(stage_before)  # вырос, пока игра была закрыта
 	if not settings.notify_asked:  # экран разрешения — один раз и только там, где он нужен

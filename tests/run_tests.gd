@@ -37,6 +37,7 @@ func _initialize() -> void:
 	test_notify_ask()
 	test_settings_calls()
 	test_about()
+	test_tester_time()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -808,3 +809,38 @@ func test_about() -> void:
 	var mail := Game.feedback_mailto()
 	check(mail.begins_with("mailto:d.strelets.a@gmail.com?subject=Tamahochi%20feedback&body=") and mail.contains("0.0.0"),
 			"письмо: адрес, тема, версия в теле — %s" % mail)
+
+
+# --- TIME: ускорение времени для тестов ---
+
+func test_tester_time() -> void:
+	check(Storage.Settings.from_dict({"quiet_start": 22}).time_speed == 1.0, "старый settings.json → скорость ×1")
+	var g := Game.new(_adult())
+	g.mode = "bag"
+	g.bag_item = Game.BAG_ABOUT
+	g.press_a()
+	check(g.bag_item == Game.PILL, "продакшен: после ABOUT — снова PILL, TIME нет")
+	g.tester = true
+	g.bag_item = Game.BAG_ABOUT
+	g.press_a()
+	check(g.bag_item == Game.BAG_TIME, "тестовая сборка: после ABOUT — TIME")
+	var seen := []
+	for i in 4:
+		g.press_b()
+		seen.append(g.speed)
+	check(seen == [10.0, 60.0, 600.0, 1.0] and g.settings.time_speed == 1.0 and g.settings_changed, "B на TIME: ×10 → ×60 → ×600 → ×1, сохраняется")
+	check(g.mode == "bag", "TIME остаётся в сумке")
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.mode = "idle"
+	g.render(lcd)
+	var plain := lcd.buf.duplicate()
+	g.speed = 60.0
+	g.render(lcd)
+	g.draw_text(clean, "X60", Game.PLAY_Y + 9, 2)
+	var shown := true
+	for i in clean.buf.size():
+		shown = shown and (not clean.buf[i] or lcd.buf[i])
+	check(shown and lcd.buf != plain, "в комнате значок X60 при ускорении")
+	lcd.free()
+	clean.free()
