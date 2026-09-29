@@ -62,6 +62,12 @@ jobs:
           if [ -z "$KEYSTORE" ]; then echo "::error::Нет секрета ANDROID_KEYSTORE_BASE64 — релиз не выпускается"; exit 1; fi
           echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.keystore"
 
+      - name: Build notify plugin AAR
+        working-directory: android_plugin
+        run: |
+          bash ./gradlew --no-daemon assembleRelease
+          test -f ../addons/tamahochi_notify/bin/tamahochi-notify-release.aar  # AAR не в git — собираем здесь
+
       - name: Export APK
         env:
           GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/release.keystore
