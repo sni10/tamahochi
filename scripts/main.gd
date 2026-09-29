@@ -38,6 +38,12 @@ func _ready() -> void:
 	game = Game.new(state, args.speed, settings, args.grow, profile)
 	if state and state.alive and state.stage != stage_before:
 		game.start_evolution(stage_before)  # вырос, пока игра была закрыта
+	if not settings.notify_asked:  # экран разрешения — один раз и только там, где он нужен
+		if Notifier.needs_permission():
+			game.ask_notify()
+		else:
+			settings.notify_asked = true
+			Storage.save_settings(settings)
 
 	_build_ui()
 	_add_timer(Game.TICK_SEC, _on_tick)
@@ -129,6 +135,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _press(action: String) -> void:
 	if action:
 		game.call(action)
+	if game.notify_permission_wanted:
+		OS.request_permission("android.permission.POST_NOTIFICATIONS")
+		game.notify_permission_wanted = false
 	if game.settings_changed:
 		Storage.save_settings(game.settings)
 		game.settings_changed = false
