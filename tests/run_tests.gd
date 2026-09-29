@@ -37,6 +37,8 @@ func _initialize() -> void:
 	test_notify_ask()
 	test_settings_calls()
 	test_about()
+	test_tester_time()
+	test_moon()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -508,6 +510,8 @@ func test_rain_sky() -> void:
 	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 0.5)))
 	g.state.age = 3 * 86400
 	var sunny := Game.new(_pet_at(_at(rd[0], 3)))  # 03:00 — дождей не бывает
+	sunny.settings.quiet_start = 0  # без тихих часов: иначе в 03:00 ночь и луна вместо солнца
+	sunny.settings.quiet_end = 0
 	var sun_ray := 40 * Lcd.COLS + 58  # верхний луч солнца (sun1, строка 1, столбец 11)
 	check(_render(sunny, 0)[sun_ray] == 1 and _render(g, 0)[sun_ray] == 0, "в дождь солнца нет")
 	check(_render(g, 0) != _render(g, 1), "капли анимируются по тикам")
@@ -808,3 +812,52 @@ func test_about() -> void:
 	var mail := Game.feedback_mailto()
 	check(mail.begins_with("mailto:d.strelets.a@gmail.com?subject=Tamahochi%20feedback&body=") and mail.contains("0.0.0"),
 			"письмо: адрес, тема, версия в теле — %s" % mail)
+
+
+# --- TIME: ускорение времени для тестов ---
+
+func test_tester_time() -> void:
+	check(Storage.Settings.from_dict({"quiet_start": 22}).time_speed == 1.0, "старый settings.json → скорость ×1")
+	var g := Game.new(_adult())
+	g.mode = "bag"
+	g.bag_item = Game.BAG_ABOUT
+	g.press_a()
+	check(g.bag_item == Game.PILL, "продакшен: после ABOUT — снова PILL, TIME нет")
+	g.tester = true
+	g.bag_item = Game.BAG_ABOUT
+	g.press_a()
+	check(g.bag_item == Game.BAG_TIME, "тестовая сборка: после ABOUT — TIME")
+	var seen := []
+	for i in 4:
+		g.press_b()
+		seen.append(g.speed)
+	check(seen == [10.0, 60.0, 600.0, 1.0] and g.settings.time_speed == 1.0 and g.settings_changed, "B на TIME: ×10 → ×60 → ×600 → ×1, сохраняется")
+	check(g.mode == "bag", "TIME остаётся в сумке")
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.mode = "idle"
+	g.render(lcd)
+	var plain := lcd.buf.duplicate()
+	g.speed = 60.0
+	g.render(lcd)
+	g.draw_text(clean, "X60", Game.PLAY_Y + 9, 2)
+	var shown := true
+	for i in clean.buf.size():
+		shown = shown and (not clean.buf[i] or lcd.buf[i])
+	check(shown and lcd.buf != plain, "в комнате значок X60 при ускорении")
+	lcd.free()
+	clean.free()
+
+
+# --- луна ночью ---
+
+func test_moon() -> void:
+	check(Sprites.MOON != null and Sprites.MOON.w == 15, "спрайт луны загружен")
+	var sun_ray := 40 * Lcd.COLS + 58  # верхний луч солнца
+	var moon_px: int = (Game.SUN_Y + (Sprites.SUN[0].h - Sprites.MOON.h) / 2 + 12) * Lcd.COLS + Game.SUN_X + (Sprites.SUN[0].w - Sprites.MOON.w) / 2 + 7  # низ серпа, у солнца там пусто
+	var night := Game.new(_pet_at(_local(2)))
+	var day := Game.new(_pet_at(_local(12)))
+	var n := _render(night, 0)
+	var d := _render(day, 0)
+	check(n[sun_ray] == 0 and n[moon_px] == 1, "02:00 при тихих 22–08 — луна, солнца нет")
+	check(d[sun_ray] == 1 and d[moon_px] == 0, "12:00 — солнце")
