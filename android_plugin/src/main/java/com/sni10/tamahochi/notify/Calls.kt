@@ -18,7 +18,7 @@ import androidx.core.app.NotificationManagerCompat
  */
 object Calls {
     private const val PREFS = "tamahochi_notify"
-    private const val CHANNEL = "calls"
+    const val CHANNEL = "calls"
     private const val NOTIFICATION_ID = 1
 
     fun save(ctx: Context, atMs: Long, title: String, body: String) {
@@ -45,11 +45,7 @@ object Calls {
         val title = p.getString("title", null) ?: return
         val body = p.getString("body", "") ?: ""
         p.edit().clear().apply()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL, "Pet calls", NotificationManager.IMPORTANCE_HIGH)
-            )
-        }
+        ensureChannel(ctx)
         val manager = NotificationManagerCompat.from(ctx)
         if (!manager.areNotificationsEnabled()) return
         val open = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
@@ -69,6 +65,15 @@ object Calls {
             manager.notify(NOTIFICATION_ID, notification)
         } catch (_: SecurityException) {
             // разрешение отозвали между проверкой и показом — просто без уведомления
+        }
+    }
+
+    /** Канал «Pet calls»: звук и вибрацию в нём настраивает пользователь (создание идемпотентно). */
+    fun ensureChannel(ctx: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(
+                NotificationChannel(CHANNEL, "Pet calls", NotificationManager.IMPORTANCE_HIGH)
+            )
         }
     }
 

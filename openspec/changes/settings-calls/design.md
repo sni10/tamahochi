@@ -10,7 +10,7 @@
 ## Decisions
 
 ### D1. Поля экрана
-`settings_field` 0..3: FROM, TO, CALLS, SOUND. A — следующее по кругу. Раскладка на ЖК (между пунктирами y 36–131): `QUIET HOURS` 42, FROM 54, TO 72 (часы крупно ×2), `CALLS ON|OFF` 94, `SOUND` 104, `NOW ЧЧ:ММ` 120. Подсказка внизу зависит от поля: FROM/TO — `A NEXT  B +1`, CALLS — `A NEXT  B ON/OFF`, SOUND — `A NEXT  B OPEN`.
+`settings_field` 0..3: FROM, TO, CALLS, SOUND. A — следующее по кругу. Раскладка на ЖК (между пунктирами y 36–131): `QUIET HOURS` 42, FROM 54, TO 72 (часы крупно ×2), `CALLS ON|OFF` 94, `SOUND` 104, `NOW ЧЧ:ММ` 120. Подсказка внизу зависит от поля: FROM/TO — `A NEXT  B +1`, CALLS — `A NEXT  B SET` (`ON/OFF` не влезает в 72 px), SOUND — `A NEXT  B OPEN`.
 
 ### D2. Выключенный зов
 `Settings.calls_enabled` (по умолчанию `true`, в `settings.json`). В `main._leave()`: если выключен — `Notifier.cancel()` и `pending_call_at = 0` (нет плана — нет штрафа), иначе как сейчас. Логику кладём в `main.gd`, а не в `Calls.plan`, — `plan` остаётся чистым расчётом.

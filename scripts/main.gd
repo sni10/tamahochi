@@ -135,6 +135,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _press(action: String) -> void:
 	if action:
 		game.call(action)
+	if game.open_notify_settings_wanted:
+		game.open_notify_settings_wanted = false
+		if not Notifier.open_settings():
+			game.settings_note = "NOT HERE"
 	if game.notify_permission_wanted:
 		OS.request_permission("android.permission.POST_NOTIFICATIONS")
 		game.notify_permission_wanted = false
@@ -170,7 +174,10 @@ func _notification(what: int) -> void:
 
 ## Игрок уходит: запланировать зов (если есть живой питомец) и сохранить.
 func _leave() -> void:
-	if game.savable():
+	if game.savable() and not game.settings.calls_enabled:  # CALLS OFF: не звать — и не штрафовать
+		game.state.pending_call_at = 0.0
+		Notifier.cancel()
+	elif game.savable():
 		var n := Calls.plan(game.state, game.settings.quiet(), Time.get_unix_time_from_system(), game.profile, game.skin().name)
 		game.state.pending_call_at = n.get("at", 0.0)
 		if n:

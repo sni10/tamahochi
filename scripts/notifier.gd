@@ -24,6 +24,12 @@ static func needs_permission() -> bool:
 	return p != null and int(p.sdk_int()) >= 33
 
 
+## Открыть системные настройки уведомлений игры (звук, вибрация). false — негде (ПК).
+static func open_settings() -> bool:
+	var p := _plugin()
+	return p != null and bool(p.open_settings())
+
+
 static func cancel() -> void:
 	var p := _plugin()
 	if p:

@@ -671,7 +671,7 @@ func _draw_settings(lcd: Lcd) -> void:
 		draw_text(lcd, line[1], line[2], 8)
 	var now := Decay.local_time(state.clock)
 	draw_text(lcd, settings_note if settings_note else "NOW %02d:%02d" % [now.hour, now.minute], 120)
-	var action: String = ["+1", "+1", "ON/OFF", "OPEN"][settings_field]
+	var action: String = ["+1", "+1", "SET", "OPEN"][settings_field]
 	draw_text(lcd, "A NEXT  B " + action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)
 
