@@ -458,7 +458,11 @@ func _draw_room(lcd: Lcd) -> void:
 	if Weather.is_rain(state.clock):
 		_draw_rain(lcd)
 		return
-	lcd.blit(Sprites.SUN[frame / 2 % 2], SUN_X, SUN_Y)
+	if Decay.is_night(state.clock, settings.quiet()):  # игровая ночь = тихие часы: питомец спит до утра
+		var sun: Sprites.Sprite = Sprites.SUN[0]
+		lcd.blit(Sprites.MOON, SUN_X + (sun.w - Sprites.MOON.w) / 2, SUN_Y + (sun.h - Sprites.MOON.h) / 2)
+	else:
+		lcd.blit(Sprites.SUN[frame / 2 % 2], SUN_X, SUN_Y)
 	var span := COLS + Sprites.CLOUD.w
 	var cloud_x := (frame / 2) % span - Sprites.CLOUD.w
 	lcd.erase(Sprites.CLOUD_MASK, cloud_x, CLOUD_Y)

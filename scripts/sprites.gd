@@ -55,6 +55,7 @@ static var GHOST: Sprite
 static var RAIN_CLOUD: Sprite
 static var RAIN: Array  # два кадра плитки капель
 static var UMBRELLA: Sprite
+static var MOON: Sprite
 
 
 class Sprite:
@@ -313,3 +314,4 @@ static func _static_init() -> void:
 	RAIN_CLOUD = _require(world, "rain_cloud", "world.txt")
 	RAIN = [_require(world, "rain1", "world.txt"), _require(world, "rain2", "world.txt")]
 	UMBRELLA = _require(world, "umbrella", "world.txt")
+	MOON = _require(world, "moon", "world.txt")

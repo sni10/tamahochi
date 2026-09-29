@@ -38,6 +38,7 @@ func _initialize() -> void:
 	test_settings_calls()
 	test_about()
 	test_tester_time()
+	test_moon()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -509,6 +510,8 @@ func test_rain_sky() -> void:
 	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 0.5)))
 	g.state.age = 3 * 86400
 	var sunny := Game.new(_pet_at(_at(rd[0], 3)))  # 03:00 — дождей не бывает
+	sunny.settings.quiet_start = 0  # без тихих часов: иначе в 03:00 ночь и луна вместо солнца
+	sunny.settings.quiet_end = 0
 	var sun_ray := 40 * Lcd.COLS + 58  # верхний луч солнца (sun1, строка 1, столбец 11)
 	check(_render(sunny, 0)[sun_ray] == 1 and _render(g, 0)[sun_ray] == 0, "в дождь солнца нет")
 	check(_render(g, 0) != _render(g, 1), "капли анимируются по тикам")
@@ -844,3 +847,17 @@ func test_tester_time() -> void:
 	check(shown and lcd.buf != plain, "в комнате значок X60 при ускорении")
 	lcd.free()
 	clean.free()
+
+
+# --- луна ночью ---
+
+func test_moon() -> void:
+	check(Sprites.MOON != null and Sprites.MOON.w == 15, "спрайт луны загружен")
+	var sun_ray := 40 * Lcd.COLS + 58  # верхний луч солнца
+	var moon_px: int = (Game.SUN_Y + (Sprites.SUN[0].h - Sprites.MOON.h) / 2 + 12) * Lcd.COLS + Game.SUN_X + (Sprites.SUN[0].w - Sprites.MOON.w) / 2 + 7  # низ серпа, у солнца там пусто
+	var night := Game.new(_pet_at(_local(2)))
+	var day := Game.new(_pet_at(_local(12)))
+	var n := _render(night, 0)
+	var d := _render(day, 0)
+	check(n[sun_ray] == 0 and n[moon_px] == 1, "02:00 при тихих 22–08 — луна, солнца нет")
+	check(d[sun_ray] == 1 and d[moon_px] == 0, "12:00 — солнце")
