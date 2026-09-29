@@ -36,6 +36,8 @@ const DOTS_Y := 25
 
 enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
+enum { FIELD_FROM, FIELD_TO, FIELD_CALLS, FIELD_SOUND }
+const SETTINGS_FIELDS := 4
 enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS }
 const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS"]
 const FREE_PILLS_PER_DAY := 5
@@ -59,7 +61,9 @@ var state: PetState
 var speed: float
 var grow: float
 var settings: Storage.Settings
-var settings_field := 0          # 0 — начало тихих часов, 1 — конец
+var settings_field := 0          # поле экрана настроек: FIELD_FROM … FIELD_SOUND
+var settings_note := ""          # короткая надпись на экране настроек (NOT HERE), до следующего нажатия
+var open_notify_settings_wanted := false  # main.gd открывает системные настройки уведомлений
 var settings_changed := false    # main.gd сохраняет настройки и сбрасывает флаг
 var profile: Storage.Profile
 var profile_changed := false
@@ -216,7 +220,8 @@ func press_a() -> void:
 		choice = posmod(choice - 1, Sprites.PETS.size())
 		return
 	if mode == "settings":
-		settings_field = 1 - settings_field
+		settings_field = (settings_field + 1) % SETTINGS_FIELDS
+		settings_note = ""
 		return
 	if mode == "bag":
 		bag_item = (bag_item + 1) % BAG_NAMES.size()
@@ -247,10 +252,16 @@ func press_b() -> void:
 		_set_mode("select")
 		return
 	if mode == "settings":
-		if settings_field == 0:
+		settings_note = ""
+		if settings_field == FIELD_FROM:
 			settings.quiet_start = (settings.quiet_start + 1) % 24
-		else:
+		elif settings_field == FIELD_TO:
 			settings.quiet_end = (settings.quiet_end + 1) % 24
+		elif settings_field == FIELD_CALLS:
+			settings.calls_enabled = not settings.calls_enabled
+		else:
+			open_notify_settings_wanted = true  # main.gd откроет системные настройки уведомлений
+			return
 		settings_changed = true
 		return
 	if mode == "bag":
@@ -327,7 +338,8 @@ func pills_left() -> int:
 func _use_bag_item() -> void:
 	var s := state
 	if bag_item == BAG_SETTINGS:
-		settings_field = 0
+		settings_field = FIELD_FROM
+		settings_note = ""
 		_set_mode("settings")
 		return
 	if bag_item == UMBRELLA:
@@ -644,17 +656,23 @@ func draw_text(lcd: Lcd, text: String, y: int, x := -1, scale := 1) -> void:
 func _draw_settings(lcd: Lcd) -> void:
 	var st := settings
 	draw_text(lcd, "SETTINGS", 15)
-	draw_text(lcd, "QUIET HOURS", 45)
-	var rows := [["FROM", st.quiet_start, 60], ["TO", st.quiet_end, 82]]
+	draw_text(lcd, "QUIET HOURS", 42)
+	var rows := [["FROM", st.quiet_start, 54], ["TO", st.quiet_end, 72]]
 	for i in rows.size():
 		var y: int = rows[i][2]
 		if i == settings_field:
 			lcd.blit(Sprites.ARROW_RIGHT, 2, y + 3)
 		draw_text(lcd, rows[i][0], y + 3, 8)
 		draw_text(lcd, "%02d:00" % rows[i][1], y, 30, 2)
+	var lines := [[FIELD_CALLS, "CALLS ON" if st.calls_enabled else "CALLS OFF", 94], [FIELD_SOUND, "SOUND", 104]]
+	for line in lines:
+		if line[0] == settings_field:
+			lcd.blit(Sprites.ARROW_RIGHT, 2, line[2])
+		draw_text(lcd, line[1], line[2], 8)
 	var now := Decay.local_time(state.clock)
-	draw_text(lcd, "NOW %02d:%02d" % [now.hour, now.minute], 112)
-	draw_text(lcd, "A NEXT  B +1", ICON_Y)
+	draw_text(lcd, settings_note if settings_note else "NOW %02d:%02d" % [now.hour, now.minute], 120)
+	var action: String = ["+1", "+1", "ON/OFF", "OPEN"][settings_field]
+	draw_text(lcd, "A NEXT  B " + action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)
 
 

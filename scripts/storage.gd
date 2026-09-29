@@ -11,18 +11,21 @@ class Settings:
 	var quiet_start := 22
 	var quiet_end := 8
 	var notify_asked := false  # экран разрешения на уведомления уже показан (один раз)
+	var calls_enabled := true  # CALLS ON/OFF: планировать ли зов-уведомление при уходе из игры
 
 	func quiet() -> Array:
 		return [quiet_start, quiet_end]
 
 	func to_dict() -> Dictionary:
-		return {"quiet_start": quiet_start, "quiet_end": quiet_end, "notify_asked": notify_asked}
+		return {"quiet_start": quiet_start, "quiet_end": quiet_end, "notify_asked": notify_asked,
+				"calls_enabled": calls_enabled}
 
 	static func from_dict(data: Dictionary) -> Settings:
 		var st := Settings.new()
 		st.quiet_start = int(data.get("quiet_start", st.quiet_start))
 		st.quiet_end = int(data.get("quiet_end", st.quiet_end))
 		st.notify_asked = bool(data.get("notify_asked", false))
+		st.calls_enabled = bool(data.get("calls_enabled", true))
 		return st
 
 

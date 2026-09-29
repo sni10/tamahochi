@@ -148,8 +148,15 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
 
 - ✅ Логика готова (change `call-notifications`): план при уходе — `Calls.plan` (повод уже есть →
   через 15 мин), текст — `Calls.text`, штраф за проигнорированный зов — `Calls.punish_ignored`,
-  доставка — `scripts/notifier.gd` (на ПК — строка в лог). Осталось: Kotlin-плагин доставки на Android
-  (синглтон `TamahochiNotify`: `schedule(at, title, body)`, `cancel()`), разрешение Android 13+.
+  доставка — `scripts/notifier.gd` (на ПК — строка в лог).
+- ✅ Доставка на Android (change `android-notify-plugin`): Kotlin-плагин `android_plugin/` → синглтон
+  `TamahochiNotify` (неточный будильник, баннер со звуком, нажатие открывает игру, переживает
+  перезагрузку); экран разрешения на ЖК при первом запуске (Android 13+). Проверено на Xiaomi
+  Redmi Note Pro 5G (v0.0.8): пуш пришёл. Не проверено: «вернулся раньше — пуша нет»,
+  перезагрузка, запрет уведомлений.
+  Локальная сборка APK: сначала `android_plugin/gradlew assembleRelease assembleDebug` (AAR → `addons/tamahochi_notify/bin`).
+- Если на Xiaomi/Huawei уведомления не приходят — подсказка «разрешите автозапуск» в описание
+  в Google Play / FAQ (B.6); в игре ничего не просим.
 
 - Локальные уведомления без сервера: при сворачивании приложения по `next_need_time()`
   (A.4) планируется ближайшее уведомление.
@@ -299,7 +306,7 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
 6. ~~Перенос на Godot (B.1)~~ ✅
 7. ~~Погода: солнце / дождь (B.7)~~ ✅
 8. ~~Дождь: болезнь, зонтик, редкие дожди (B.8)~~ ✅
-9. Push-уведомления и настройки (B.2, B.3)
+9. ~~Push-уведомления (B.2)~~ ✅; настройки (B.3) — урезанно: CALLS ON/OFF и системные настройки звука
 10. Магазин, Play Billing, AdMob (B.4) — с зонтиками
 11. Закрытый тест и публикация (B.6)
 
