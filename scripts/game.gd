@@ -63,6 +63,8 @@ var settings_field := 0          # 0 — начало тихих часов, 1 �
 var settings_changed := false    # main.gd сохраняет настройки и сбрасывает флаг
 var profile: Storage.Profile
 var profile_changed := false
+var notify_permission_wanted := false  # main.gd запрашивает системное разрешение и сбрасывает флаг
+var after_ask := ""                     # куда вернуться с экрана разрешения
 var bag_item := 0
 var selected := -1               # -1 — ничего не выбрано
 var choice := 0                  # какой питомец показан на экране выбора
@@ -131,15 +133,21 @@ static func _center_for(w: int) -> int:
 
 ## На экране выбора нет настоящего питомца — сохранять нечего.
 func savable() -> bool:
-	return mode != "select"
+	return (after_ask if mode == "notify_ask" else mode) != "select"
+
+
+## Один раз показать экран «разрешите уведомления»; B вернёт туда, где были.
+func ask_notify() -> void:
+	after_ask = mode
+	_set_mode("notify_ask")
 
 
 # --- время ---
 
 func tick(now := Time.get_unix_time_from_system()) -> void:
 	frame += 1
-	if mode == "select":
-		return
+	if mode == "select" or mode == "notify_ask":
+		return  # время догонит первый тик после экрана разрешения
 	var stage_before := state.stage
 	var umbrellas_before := profile.umbrellas
 	Decay.advance(state, now, speed, settings.quiet(), grow, profile)
@@ -202,6 +210,8 @@ func _walk() -> void:
 
 ## Выбор следующей иконки (на экране выбора — предыдущий питомец).
 func press_a() -> void:
+	if mode == "notify_ask":
+		return
 	if mode == "select":
 		choice = posmod(choice - 1, Sprites.PETS.size())
 		return
@@ -218,6 +228,12 @@ func press_a() -> void:
 
 ## Подтверждение выбранного действия.
 func press_b() -> void:
+	if mode == "notify_ask":
+		settings.notify_asked = true
+		settings_changed = true
+		notify_permission_wanted = true
+		_set_mode(after_ask)
+		return
 	if mode == "select":
 		if not Shop.is_unlocked(profile, skin()):
 			return  # закрыт: сначала купить
@@ -279,6 +295,8 @@ func press_b() -> void:
 
 ## Отмена: снять выбор (на экране выбора — следующий питомец).
 func press_c() -> void:
+	if mode == "notify_ask":
+		return
 	if mode == "select":
 		choice = (choice + 1) % Sprites.PETS.size()
 		return
@@ -355,7 +373,7 @@ func render(lcd: Lcd) -> void:
 	lcd.clear()
 	_dotted(lcd, SEPARATOR_TOP)
 	_dotted(lcd, SEPARATOR_BOTTOM)
-	if mode == "settings" or mode == "bag":
+	if mode in ["settings", "bag", "notify_ask"]:
 		call("_draw_" + mode, lcd)
 		lcd.flush()
 		return
@@ -638,6 +656,16 @@ func _draw_settings(lcd: Lcd) -> void:
 	draw_text(lcd, "NOW %02d:%02d" % [now.hour, now.minute], 112)
 	draw_text(lcd, "A NEXT  B +1", ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)
+
+
+# --- экран разрешения на уведомления ---
+
+func _draw_notify_ask(lcd: Lcd) -> void:
+	draw_text(lcd, "HELLO", 12, -1, 2)
+	var lines := ["I WILL CALL YOU", "WHEN I NEED YOU", "", "PLEASE ALLOW", "NOTIFICATIONS"]
+	for i in lines.size():
+		draw_text(lcd, lines[i], 50 + i * 10)
+	draw_text(lcd, "B OK", ICON_Y + 3)
 
 
 # --- экран сумки ---

@@ -18,6 +18,12 @@ static func schedule(at: float, title: String, body: String) -> void:
 	print("notify at %02d:%02d: %s — %s" % [t.hour, t.minute, title, body])
 
 
+## Нужно ли явно просить разрешение на уведомления (Android 13+, API 33).
+static func needs_permission() -> bool:
+	var p := _plugin()
+	return p != null and int(p.sdk_int()) >= 33
+
+
 static func cancel() -> void:
 	var p := _plugin()
 	if p:

@@ -34,6 +34,7 @@ func _initialize() -> void:
 	test_umbrella()
 	test_umbrella_screens()
 	test_notifications()
+	test_notify_ask()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -707,3 +708,27 @@ func test_notifications() -> void:
 	Calls.punish_ignored(s, [22, 8], _local(25))
 	check(s.care_mistakes == 0, "зов в тихие часы — штрафа нет")
 	check(PetState.from_dict({"stage": "adult_normal"}).pending_call_at == 0.0, "старый save.json → зова нет")
+
+
+# --- экран разрешения на уведомления ---
+
+func test_notify_ask() -> void:
+	check(not Storage.Settings.from_dict({"quiet_start": 22}).notify_asked, "старый settings.json → разрешение ещё не спрашивали")
+	check(not Notifier.needs_permission(), "на ПК (без плагина) экран разрешения не нужен")
+	var g := Game.new(_adult())
+	g.ask_notify()
+	check(g.mode == "notify_ask", "экран разрешения открыт")
+	g.press_a()
+	g.press_c()
+	check(g.mode == "notify_ask", "A и C на экране разрешения ничего не делают")
+	var lcd := Lcd.new()
+	g.render(lcd)
+	lcd.free()
+	g.press_b()
+	check(g.mode == "idle" and g.settings.notify_asked and g.settings_changed and g.notify_permission_wanted,
+			"B: запросить разрешение, запомнить, вернуться в комнату")
+	g = Game.new(null)
+	g.ask_notify()
+	check(not g.savable(), "экран разрешения поверх экрана выбора — сохранять нечего")
+	g.press_b()
+	check(g.mode == "select", "после экрана разрешения — снова экран выбора")
