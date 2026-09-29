@@ -36,8 +36,11 @@ const DOTS_Y := 25
 
 enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
-enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS }
-const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS"]
+enum { FIELD_FROM, FIELD_TO, FIELD_CALLS, FIELD_SOUND }
+const SETTINGS_FIELDS := 4
+enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT }
+const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT"]
+const FEEDBACK_EMAIL := "d.strelets.a@gmail.com"
 const FREE_PILLS_PER_DAY := 5
 const PILL_FEVER := 10.0
 
@@ -59,7 +62,10 @@ var state: PetState
 var speed: float
 var grow: float
 var settings: Storage.Settings
-var settings_field := 0          # 0 — начало тихих часов, 1 — конец
+var settings_field := 0          # поле экрана настроек: FIELD_FROM … FIELD_SOUND
+var settings_note := ""          # короткая надпись на экране настроек (NOT HERE), до следующего нажатия
+var open_notify_settings_wanted := false  # main.gd открывает системные настройки уведомлений
+var feedback_wanted := false  # main.gd открывает письмо разработчику (feedback_mailto)
 var settings_changed := false    # main.gd сохраняет настройки и сбрасывает флаг
 var profile: Storage.Profile
 var profile_changed := false
@@ -108,7 +114,7 @@ func _icons() -> Array:
 
 
 func _bag_icons() -> Array:
-	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS]
+	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT]
 
 
 func _is_birth() -> bool:
@@ -210,13 +216,14 @@ func _walk() -> void:
 
 ## Выбор следующей иконки (на экране выбора — предыдущий питомец).
 func press_a() -> void:
-	if mode == "notify_ask":
+	if mode == "notify_ask" or mode == "about":
 		return
 	if mode == "select":
 		choice = posmod(choice - 1, Sprites.PETS.size())
 		return
 	if mode == "settings":
-		settings_field = 1 - settings_field
+		settings_field = (settings_field + 1) % SETTINGS_FIELDS
+		settings_note = ""
 		return
 	if mode == "bag":
 		bag_item = (bag_item + 1) % BAG_NAMES.size()
@@ -228,6 +235,9 @@ func press_a() -> void:
 
 ## Подтверждение выбранного действия.
 func press_b() -> void:
+	if mode == "about":
+		feedback_wanted = true
+		return
 	if mode == "notify_ask":
 		settings.notify_asked = true
 		settings_changed = true
@@ -247,10 +257,16 @@ func press_b() -> void:
 		_set_mode("select")
 		return
 	if mode == "settings":
-		if settings_field == 0:
+		settings_note = ""
+		if settings_field == FIELD_FROM:
 			settings.quiet_start = (settings.quiet_start + 1) % 24
-		else:
+		elif settings_field == FIELD_TO:
 			settings.quiet_end = (settings.quiet_end + 1) % 24
+		elif settings_field == FIELD_CALLS:
+			settings.calls_enabled = not settings.calls_enabled
+		else:
+			open_notify_settings_wanted = true  # main.gd откроет системные настройки уведомлений
+			return
 		settings_changed = true
 		return
 	if mode == "bag":
@@ -295,6 +311,9 @@ func press_b() -> void:
 
 ## Отмена: снять выбор (на экране выбора — следующий питомец).
 func press_c() -> void:
+	if mode == "about":
+		_set_mode("bag")
+		return
 	if mode == "notify_ask":
 		return
 	if mode == "select":
@@ -327,8 +346,12 @@ func pills_left() -> int:
 func _use_bag_item() -> void:
 	var s := state
 	if bag_item == BAG_SETTINGS:
-		settings_field = 0
+		settings_field = FIELD_FROM
+		settings_note = ""
 		_set_mode("settings")
+		return
+	if bag_item == BAG_ABOUT:
+		_set_mode("about")
 		return
 	if bag_item == UMBRELLA:
 		_set_mode("no")  # зонтик раскрывается сам в начале дождя — вручную нечего применять
@@ -373,7 +396,7 @@ func render(lcd: Lcd) -> void:
 	lcd.clear()
 	_dotted(lcd, SEPARATOR_TOP)
 	_dotted(lcd, SEPARATOR_BOTTOM)
-	if mode in ["settings", "bag", "notify_ask"]:
+	if mode in ["settings", "bag", "notify_ask", "about"]:
 		call("_draw_" + mode, lcd)
 		lcd.flush()
 		return
@@ -644,17 +667,23 @@ func draw_text(lcd: Lcd, text: String, y: int, x := -1, scale := 1) -> void:
 func _draw_settings(lcd: Lcd) -> void:
 	var st := settings
 	draw_text(lcd, "SETTINGS", 15)
-	draw_text(lcd, "QUIET HOURS", 45)
-	var rows := [["FROM", st.quiet_start, 60], ["TO", st.quiet_end, 82]]
+	draw_text(lcd, "QUIET HOURS", 42)
+	var rows := [["FROM", st.quiet_start, 54], ["TO", st.quiet_end, 72]]
 	for i in rows.size():
 		var y: int = rows[i][2]
 		if i == settings_field:
 			lcd.blit(Sprites.ARROW_RIGHT, 2, y + 3)
 		draw_text(lcd, rows[i][0], y + 3, 8)
 		draw_text(lcd, "%02d:00" % rows[i][1], y, 30, 2)
+	var lines := [[FIELD_CALLS, "CALLS ON" if st.calls_enabled else "CALLS OFF", 94], [FIELD_SOUND, "SOUND", 104]]
+	for line in lines:
+		if line[0] == settings_field:
+			lcd.blit(Sprites.ARROW_RIGHT, 2, line[2])
+		draw_text(lcd, line[1], line[2], 8)
 	var now := Decay.local_time(state.clock)
-	draw_text(lcd, "NOW %02d:%02d" % [now.hour, now.minute], 112)
-	draw_text(lcd, "A NEXT  B +1", ICON_Y)
+	draw_text(lcd, settings_note if settings_note else "NOW %02d:%02d" % [now.hour, now.minute], 120)
+	var action: String = ["+1", "+1", "SET", "OPEN"][settings_field]
+	draw_text(lcd, "A NEXT  B " + action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)
 
 
@@ -666,6 +695,33 @@ func _draw_notify_ask(lcd: Lcd) -> void:
 	for i in lines.size():
 		draw_text(lcd, lines[i], 50 + i * 10)
 	draw_text(lcd, "B OK", ICON_Y + 3)
+
+
+# --- экран About ---
+
+## Версия сборки: CI проставляет её в application/config/version, локально — 0.0.0.
+static func version() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+
+
+## Письмо разработчику: адрес, тема и сведения о сборке и устройстве — текст игрок допишет сам.
+static func feedback_mailto() -> String:
+	var body := "
+
+---
+Version: %s
+Device: %s
+OS: %s %s" % [version(), OS.get_model_name(), OS.get_name(), OS.get_version()]
+	return "mailto:%s?subject=%s&body=%s" % [FEEDBACK_EMAIL, "Tamahochi feedback".uri_encode(), body.uri_encode()]
+
+
+func _draw_about(lcd: Lcd) -> void:
+	draw_text(lcd, "ABOUT", 15)
+	var lines := ["TAMAHOCHI", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
+	for i in lines.size():
+		draw_text(lcd, lines[i], 48 + i * 11)
+	draw_text(lcd, "B FEEDBACK", ICON_Y)
+	draw_text(lcd, "C BACK", ICON_Y + 9)
 
 
 # --- экран сумки ---
@@ -687,6 +743,6 @@ func _draw_bag(lcd: Lcd) -> void:
 		draw_text(lcd, "A NEXT", ICON_Y)
 		draw_text(lcd, "C BACK", ICON_Y + 9)
 		return
-	var action := "OPEN" if bag_item == BAG_SETTINGS else "USE"
+	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT] else "USE"
 	draw_text(lcd, "A NEXT  B %s" % action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)

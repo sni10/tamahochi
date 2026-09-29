@@ -35,6 +35,8 @@ func _initialize() -> void:
 	test_umbrella_screens()
 	test_notifications()
 	test_notify_ask()
+	test_settings_calls()
+	test_about()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -732,3 +734,77 @@ func test_notify_ask() -> void:
 	check(not g.savable(), "экран разрешения поверх экрана выбора — сохранять нечего")
 	g.press_b()
 	check(g.mode == "select", "после экрана разрешения — снова экран выбора")
+
+
+# --- настройки: зов и звук ---
+
+func test_settings_calls() -> void:
+	check(Storage.Settings.from_dict({"quiet_start": 22}).calls_enabled, "старый settings.json → зов включён")
+	var st := Storage.Settings.new()
+	st.calls_enabled = false
+	check(not Storage.Settings.from_dict(st.to_dict()).calls_enabled, "CALLS OFF сохраняется")
+
+	var g := Game.new(_adult())
+	g.mode = "bag"
+	g.bag_item = Game.BAG_SETTINGS
+	g.press_b()
+	check(g.mode == "settings" and g.settings_field == Game.FIELD_FROM, "настройки открылись на FROM")
+	for i in 4:
+		g.press_a()
+	check(g.settings_field == Game.FIELD_FROM, "A четыре раза — снова FROM")
+	g.press_a()
+	g.press_a()
+	g.settings_changed = false
+	g.press_b()
+	check(not g.settings.calls_enabled and g.settings_changed, "B на CALLS → OFF, сохранить")
+	g.press_a()
+	g.press_b()
+	check(g.open_notify_settings_wanted and g.settings.calls_enabled == false, "B на SOUND → открыть системные настройки")
+
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.settings_note = "NOT HERE"
+	g.render(lcd)
+	g.draw_text(clean, "NOT HERE", 120)
+	g.draw_text(clean, "CALLS OFF", 94, 8)
+	var shown := true
+	for i in clean.buf.size():
+		shown = shown and (not clean.buf[i] or lcd.buf[i])
+	check(shown, "на экране CALLS OFF и NOT HERE")
+	g.press_a()
+	check(g.settings_note == "", "надпись пропадает при следующем нажатии")
+	lcd.free()
+	clean.free()
+
+
+# --- About и отзыв ---
+
+func test_about() -> void:
+	check(Sprites.ICON_ABOUT != null and Sprites.ICON_ABOUT.w == 12, "иконка About загружена")
+	var g := Game.new(_adult())
+	g.mode = "bag"
+	g.bag_item = Game.BAG_SETTINGS
+	g.press_a()
+	check(g.bag_item == Game.BAG_ABOUT, "ABOUT — после SETTINGS")
+	g.press_b()
+	check(g.mode == "about", "B на ABOUT — экран About")
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.render(lcd)
+	for line in [["TAMAHOCHI", 48], ["V 0.0.0", 59], ["MADE BY SNI10", 81], ["WITH LOVE", 92], ["TO PETS", 103], ["B FEEDBACK", Game.ICON_Y]]:
+		g.draw_text(clean, line[0], line[1])
+	var shown := true
+	for i in clean.buf.size():
+		shown = shown and (not clean.buf[i] or lcd.buf[i])
+	check(shown, "на экране About все строки")
+	lcd.free()
+	clean.free()
+	g.press_a()
+	check(g.mode == "about", "A на About ничего не делает")
+	g.press_b()
+	check(g.feedback_wanted, "B на About — написать отзыв")
+	g.press_c()
+	check(g.mode == "bag" and g.bag_item == Game.BAG_ABOUT, "C — назад в сумку на ABOUT")
+	var mail := Game.feedback_mailto()
+	check(mail.begins_with("mailto:d.strelets.a@gmail.com?subject=Tamahochi%20feedback&body=") and mail.contains("0.0.0"),
+			"письмо: адрес, тема, версия в теле — %s" % mail)
