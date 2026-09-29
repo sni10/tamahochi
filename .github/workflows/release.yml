@@ -53,7 +53,9 @@ jobs:
           version="$major.$minor.$((patch + 1))"
           echo "VERSION=$version" >> "$GITHUB_ENV"
           sed -i "s/^version\/code=.*/version\/code=${{ github.run_number }}/; s/^version\/name=.*/version\/name=\"$version\"/" export_presets.cfg
+          sed -i "s|^config/version=.*|config/version=\"$version\"|" project.godot  # версия на экране About
           grep '^version/' export_presets.cfg
+          grep '^config/version' project.godot
 
       - name: Keystore
         env:

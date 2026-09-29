@@ -181,6 +181,12 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
   На Xiaomi (HyperOS) может открыться общий экран уведомлений приложения — звук настраивается и там.
 - **«Восстановить покупки»** — вместе с магазином (B.4).
 
+## B.3a About и отзыв — ✅ (change `about-feedback`)
+
+Сумка → ABOUT: «TAMAHOCHI», версия (CI пишет её в `application/config/version`), «MADE BY SNI10 /
+WITH LOVE / TO PETS». B FEEDBACK — почтовое приложение с письмом на d.strelets.a@gmail.com:
+тема «Tamahochi feedback», в теле версия, модель телефона, ОС — для отзывов тестировщиков (B.6).
+
 ## B.4 Монетизация
 
 ### Бесплатно
@@ -313,7 +319,7 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
 6. ~~Перенос на Godot (B.1)~~ ✅
 7. ~~Погода: солнце / дождь (B.7)~~ ✅
 8. ~~Дождь: болезнь, зонтик, редкие дожди (B.8)~~ ✅
-9. ~~Push-уведомления и настройки (B.2, B.3)~~ ✅ (B.3 — урезанно)
+9. ~~Push-уведомления и настройки (B.2, B.3)~~ ✅ (B.3 — урезанно); ~~About и отзыв (B.3a)~~ ✅
 10. Магазин, Play Billing, AdMob (B.4) — с зонтиками
 11. Закрытый тест и публикация (B.6)
 

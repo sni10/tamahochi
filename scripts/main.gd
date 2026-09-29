@@ -135,6 +135,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _press(action: String) -> void:
 	if action:
 		game.call(action)
+	if game.feedback_wanted:
+		game.feedback_wanted = false
+		OS.shell_open(Game.feedback_mailto())  # почтовое приложение с готовым письмом
 	if game.open_notify_settings_wanted:
 		game.open_notify_settings_wanted = false
 		if not Notifier.open_settings():

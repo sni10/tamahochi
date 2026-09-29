@@ -38,8 +38,9 @@ enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
 enum { FIELD_FROM, FIELD_TO, FIELD_CALLS, FIELD_SOUND }
 const SETTINGS_FIELDS := 4
-enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS }
-const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS"]
+enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT }
+const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT"]
+const FEEDBACK_EMAIL := "d.strelets.a@gmail.com"
 const FREE_PILLS_PER_DAY := 5
 const PILL_FEVER := 10.0
 
@@ -64,6 +65,7 @@ var settings: Storage.Settings
 var settings_field := 0          # поле экрана настроек: FIELD_FROM … FIELD_SOUND
 var settings_note := ""          # короткая надпись на экране настроек (NOT HERE), до следующего нажатия
 var open_notify_settings_wanted := false  # main.gd открывает системные настройки уведомлений
+var feedback_wanted := false  # main.gd открывает письмо разработчику (feedback_mailto)
 var settings_changed := false    # main.gd сохраняет настройки и сбрасывает флаг
 var profile: Storage.Profile
 var profile_changed := false
@@ -112,7 +114,7 @@ func _icons() -> Array:
 
 
 func _bag_icons() -> Array:
-	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS]
+	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT]
 
 
 func _is_birth() -> bool:
@@ -214,7 +216,7 @@ func _walk() -> void:
 
 ## Выбор следующей иконки (на экране выбора — предыдущий питомец).
 func press_a() -> void:
-	if mode == "notify_ask":
+	if mode == "notify_ask" or mode == "about":
 		return
 	if mode == "select":
 		choice = posmod(choice - 1, Sprites.PETS.size())
@@ -233,6 +235,9 @@ func press_a() -> void:
 
 ## Подтверждение выбранного действия.
 func press_b() -> void:
+	if mode == "about":
+		feedback_wanted = true
+		return
 	if mode == "notify_ask":
 		settings.notify_asked = true
 		settings_changed = true
@@ -306,6 +311,9 @@ func press_b() -> void:
 
 ## Отмена: снять выбор (на экране выбора — следующий питомец).
 func press_c() -> void:
+	if mode == "about":
+		_set_mode("bag")
+		return
 	if mode == "notify_ask":
 		return
 	if mode == "select":
@@ -341,6 +349,9 @@ func _use_bag_item() -> void:
 		settings_field = FIELD_FROM
 		settings_note = ""
 		_set_mode("settings")
+		return
+	if bag_item == BAG_ABOUT:
+		_set_mode("about")
 		return
 	if bag_item == UMBRELLA:
 		_set_mode("no")  # зонтик раскрывается сам в начале дождя — вручную нечего применять
@@ -385,7 +396,7 @@ func render(lcd: Lcd) -> void:
 	lcd.clear()
 	_dotted(lcd, SEPARATOR_TOP)
 	_dotted(lcd, SEPARATOR_BOTTOM)
-	if mode in ["settings", "bag", "notify_ask"]:
+	if mode in ["settings", "bag", "notify_ask", "about"]:
 		call("_draw_" + mode, lcd)
 		lcd.flush()
 		return
@@ -686,6 +697,33 @@ func _draw_notify_ask(lcd: Lcd) -> void:
 	draw_text(lcd, "B OK", ICON_Y + 3)
 
 
+# --- экран About ---
+
+## Версия сборки: CI проставляет её в application/config/version, локально — 0.0.0.
+static func version() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+
+
+## Письмо разработчику: адрес, тема и сведения о сборке и устройстве — текст игрок допишет сам.
+static func feedback_mailto() -> String:
+	var body := "
+
+---
+Version: %s
+Device: %s
+OS: %s %s" % [version(), OS.get_model_name(), OS.get_name(), OS.get_version()]
+	return "mailto:%s?subject=%s&body=%s" % [FEEDBACK_EMAIL, "Tamahochi feedback".uri_encode(), body.uri_encode()]
+
+
+func _draw_about(lcd: Lcd) -> void:
+	draw_text(lcd, "ABOUT", 15)
+	var lines := ["TAMAHOCHI", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
+	for i in lines.size():
+		draw_text(lcd, lines[i], 48 + i * 11)
+	draw_text(lcd, "B FEEDBACK", ICON_Y)
+	draw_text(lcd, "C BACK", ICON_Y + 9)
+
+
 # --- экран сумки ---
 
 func _draw_bag(lcd: Lcd) -> void:
@@ -705,6 +743,6 @@ func _draw_bag(lcd: Lcd) -> void:
 		draw_text(lcd, "A NEXT", ICON_Y)
 		draw_text(lcd, "C BACK", ICON_Y + 9)
 		return
-	var action := "OPEN" if bag_item == BAG_SETTINGS else "USE"
+	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT] else "USE"
 	draw_text(lcd, "A NEXT  B %s" % action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)
