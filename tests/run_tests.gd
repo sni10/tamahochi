@@ -430,6 +430,7 @@ func test_weather() -> void:
 	var short_inf := 0
 	var long_n := 0
 	var long_inf := 0
+	var night := 0
 	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
 	for i in 1000:
 		var d := Time.get_datetime_dict_from_unix_time(day + i * 86400)
@@ -438,16 +439,18 @@ func test_weather() -> void:
 		counts[rs.size()] = counts.get(rs.size(), 0) + 1
 		var prev_end := 0
 		for r in rs:
-			var in_window: bool = (r.start >= 6 * 60 and r.start < 13 * 60) or (r.start >= 14 * 60 and r.start < 21 * 60)
-			ok = ok and r.minutes >= 20 and r.minutes <= 60 and in_window and r.start >= prev_end and r.start + r.minutes <= 22 * 60
+			var in_window: bool = r.start < 11 * 60 or (r.start >= 12 * 60 and r.start < 23 * 60)
+			ok = ok and r.minutes >= 20 and r.minutes <= 60 and in_window and r.start >= prev_end and r.start + r.minutes <= 24 * 60
 			prev_end = r.start + r.minutes
+			night += int(r.start < 6 * 60 or r.start >= 22 * 60)
 			if r.minutes <= 25:
 				short_n += 1
 				short_inf += int(r.infects)
 			elif r.minutes >= 55:
 				long_n += 1
 				long_inf += int(r.infects)
-	check(ok, "1000 дат: 1–2 дождя, 20–60 мин, в своих окнах, без пересечений, до 22:00")
+	check(ok, "1000 дат: 1–2 дождя, 20–60 мин, в своих окнах, без пересечений, до полуночи")
+	check(night > 100, "дожди бывают и ночью: %d" % night)
 	check(counts[1] > 300 and counts[2] > 300, "бывает и 1, и 2 дождя: %s" % [counts])
 	check(short_n > 50 and long_n > 50, "есть и короткие, и длинные дожди: %d / %d" % [short_n, long_n])
 	check(short_inf >= short_n * 0.15 and short_inf <= short_n * 0.35, "короткие заражают 15–35%%: %d из %d" % [short_inf, short_n])
@@ -489,6 +492,12 @@ func _rain_day(minutes: int, infects: Variant = null, exact := false) -> Array:
 	return []
 
 
+## Тихие часы вокруг дождя, начинающегося в `hours` (дожди бывают в любое время суток).
+func _quiet_around(hours: float) -> Array:
+	var h := floori(hours)
+	return [(h + 23) % 24, (h + 2) % 24]
+
+
 func test_rain() -> void:
 	Weather.enabled = true
 	var old := PetState.from_dict({"stage": "adult_normal"})
@@ -509,7 +518,7 @@ func test_rain() -> void:
 
 	s = _pet_at(start)
 	s.sleeping = true
-	Decay.apply(s, HOUR, [0, 23])
+	Decay.apply(s, HOUR, _quiet_around(rd[1]))
 	check(s.happiness == 100.0, "ночной сон под дождём — счастье не меняется")
 
 	s = _pet_at(start)
@@ -623,11 +632,11 @@ func test_umbrella() -> void:
 	s = _pet_at(start)
 	s.sleeping = true
 	p = _umbrellas(1)
-	Decay.apply(s, HOUR, [0, 23], 1.0, p)
+	Decay.apply(s, HOUR, _quiet_around(wet[1]), 1.0, p)
 	check(p.umbrellas == 0 and not s.sick and s.happiness == 100.0, "дождь во сне: зонтик раскрылся сразу, не заразился")
 	s = _pet_at(start)
 	s.sleeping = true
-	Decay.apply(s, HOUR, [0, 23], 1.0, _umbrellas(0))
+	Decay.apply(s, HOUR, _quiet_around(wet[1]), 1.0, _umbrellas(0))
 	check(s.sick and s.care_mistakes == 1, "заражающий дождь во сне без зонтика → болен")
 
 	s = _pet_at(start)
