@@ -1,7 +1,7 @@
 ## 1. Товары и профиль
 
-- [ ] 1.1 `Profile.pills` (по умолчанию 0); `Shop`: `ad_pill`, `pill_pack` (20), `syringe_pack` (5, без зонтиков), `umbrella_pack` (5), `premium` (PUPPY в купленные + 50/25/25, один раз); `is_unlocked` — бесплатный или купленный; проверка: тесты выдачи всех товаров, повторный premium, PUPPY открыт, CAT нет, старый `player.json` → pills 0
-- [ ] 1.2 `scripts/store.gd` — заглушка: `buy(product)` / `watch_ad(product)` → при `tester` сразу `Shop.grant`, иначе `false`; проверка: тесты — tester → выдано; не tester → не выдано
+- [x] 1.1 `Profile.pills` (по умолчанию 0); `Shop`: `ad_pill`, `pill_pack` (20), `syringe_pack` (5, без зонтиков), `umbrella_pack` (5), `premium` (PUPPY в купленные + 50/25/25, один раз); `is_unlocked` — бесплатный или купленный; проверка: тесты выдачи всех товаров, повторный premium, PUPPY открыт, CAT нет, старый `player.json` → pills 0
+- [x] 1.2 `scripts/store.gd` — заглушка: `buy(product)` / `watch_ad(product)` → при `tester` сразу `Shop.grant`, иначе `false`; проверка: тесты — tester → выдано; не tester → не выдано
 
 ## 2. Сумка
 

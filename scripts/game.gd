@@ -38,8 +38,14 @@ enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
 enum { FIELD_FROM, FIELD_TO, FIELD_CALLS, FIELD_SOUND }
 const SETTINGS_FIELDS := 4
-enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT, BAG_TIME }
-const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT", "TIME"]  # TIME — только tester
+enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT, BAG_PREMIUM, BAG_TIME }
+const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT", "PREMIUM", "TIME"]  # TIME — только tester
+## Подменю расходника (B на PILL/SYRINGE/UMBRELLA): применить, купить набор, получить за рекламу.
+enum { ACTION_USE, ACTION_BUY, ACTION_GET }
+const ACTION_NAMES := ["USE", "BUY", "GET"]
+const BUY_PRODUCTS := {PILL: Shop.PILL_PACK, SYRINGE: Shop.SYRINGE_PACK, UMBRELLA: Shop.UMBRELLA_PACK}
+const AD_PRODUCTS := {PILL: Shop.AD_PILL, SYRINGE: Shop.AD_REWARD, UMBRELLA: Shop.AD_UMBRELLA}
+const PACK_SIZES := {PILL: Shop.PILL_PACK_SIZE, SYRINGE: Shop.SYRINGE_PACK_SIZE, UMBRELLA: Shop.UMBRELLA_PACK_SIZE}
 const TIME_SPEEDS := [1.0, 10.0, 60.0, 600.0]
 const FEEDBACK_EMAIL := "d.strelets.a@gmail.com"
 const FREE_PILLS_PER_DAY := 5
@@ -74,6 +80,7 @@ var profile_changed := false
 var notify_permission_wanted := false  # main.gd запрашивает системное разрешение и сбрасывает флаг
 var after_ask := ""                     # куда вернуться с экрана разрешения
 var bag_item := 0
+var bag_action := -1             # строка подменю расходника; -1 — подменю закрыто
 var selected := -1               # -1 — ничего не выбрано
 var choice := 0                  # какой питомец показан на экране выбора
 var mode := "idle"
@@ -116,7 +123,7 @@ func _icons() -> Array:
 
 
 func _bag_icons() -> Array:
-	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT, Sprites.ICON_TIME]
+	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT, Sprites.ICON_PREMIUM, Sprites.ICON_TIME]
 
 
 func _is_birth() -> bool:
@@ -228,7 +235,10 @@ func press_a() -> void:
 		settings_note = ""
 		return
 	if mode == "bag":
-		bag_item = (bag_item + 1) % (BAG_NAMES.size() if tester else BAG_TIME)
+		if bag_action >= 0:
+			bag_action = (bag_action + 1) % ACTION_NAMES.size()
+		else:
+			bag_item = (bag_item + 1) % (BAG_NAMES.size() if tester else BAG_TIME)
 		return
 	if mode == "dead" or _busy():
 		return
@@ -277,6 +287,7 @@ func press_b() -> void:
 	if _busy() or selected < 0:
 		return
 	if selected == BAG:
+		bag_action = -1
 		_set_mode("bag")
 		return
 	if _is_birth():
@@ -325,7 +336,10 @@ func press_c() -> void:
 		_set_mode("bag")  # настройки открываются из сумки — туда и возвращаемся
 		return
 	if mode == "bag":
-		_set_mode("idle")
+		if bag_action >= 0:
+			bag_action = -1  # из подменю — обратно к предметам
+		else:
+			_set_mode("idle")
 		return
 	if mode == "dead" or _busy():
 		return
@@ -360,6 +374,25 @@ func _use_bag_item() -> void:
 		settings.time_speed = speed
 		settings_changed = true
 		return
+	if bag_item == BAG_PREMIUM:
+		if not profile.premium:
+			if Store.buy(profile, Shop.PREMIUM, tester):
+				profile_changed = true
+			else:
+				_set_mode("no")
+		return
+	if bag_action < 0:
+		bag_action = ACTION_USE  # расходник: B открывает подменю USE / BUY / GET
+		return
+	if bag_action != ACTION_USE:
+		var ok := Store.buy(profile, BUY_PRODUCTS[bag_item], tester) if bag_action == ACTION_BUY 				else Store.watch_ad(profile, AD_PRODUCTS[bag_item], tester)
+		if ok:
+			profile_changed = true
+		else:
+			bag_action = -1
+			_set_mode("no")  # продакшен без B.4: оплата и реклама недоступны
+		return
+	bag_action = -1
 	if bag_item == UMBRELLA:
 		_set_mode("no")  # зонтик раскрывается сам в начале дождя — вручную нечего применять
 		return
@@ -372,13 +405,17 @@ func _use_bag_item() -> void:
 		_set_mode("no")
 		return
 	if bag_item == PILL:
-		if not s.sick or not pills_left():
+		if not s.sick or not (pills_left() or profile.pills):
 			_set_mode("no")
 			return
-		if s.pills_day != _pill_day():
-			s.pills_day = _pill_day()
-			s.pills_used = 0
-		s.pills_used += 1
+		if pills_left():  # сначала 5 бесплатных в день, потом купленные
+			if s.pills_day != _pill_day():
+				s.pills_day = _pill_day()
+				s.pills_used = 0
+			s.pills_used += 1
+		else:
+			profile.pills -= 1
+			profile_changed = true
 		s.fever = maxf(0.0, s.fever - PILL_FEVER)
 		if s.fever < 1:  # не сравниваем с нулём: температура копится дробями, остаток 1e-7 не болезнь
 			s.sick = false  # вылечили
@@ -746,18 +783,33 @@ func _draw_bag(lcd: Lcd) -> void:
 	lcd.blit(Sprites.ARROW_LEFT, 8, 58)
 	lcd.blit(Sprites.ARROW_RIGHT, COLS - 8 - Sprites.ARROW_RIGHT.w, 58)
 	draw_text(lcd, BAG_NAMES[bag_item], 84)
+	if bag_item == BAG_PREMIUM:
+		var lines := ["PUPPY", "%d PILLS" % Shop.PREMIUM_PILLS, "%d SYRINGES" % Shop.PREMIUM_SYRINGES, "%d UMBRELLAS" % Shop.PREMIUM_UMBRELLAS]
+		for i in lines.size():
+			draw_text(lcd, lines[i], 95 + i * 8)
+		draw_text(lcd, "OWNED" if profile.premium else "A NEXT  B BUY", ICON_Y)
+		draw_text(lcd, "C BACK", ICON_Y + 9)
+		return
 	if bag_item == PILL:
-		draw_text(lcd, "FREE %d/%d" % [pills_left(), FREE_PILLS_PER_DAY], 96)
+		draw_text(lcd, "FREE %d/%d  X%d" % [pills_left(), FREE_PILLS_PER_DAY, profile.pills], 96)
 	elif bag_item == SYRINGE:
 		draw_text(lcd, "X %d" % profile.syringes, 96)
 	elif bag_item == UMBRELLA:
 		draw_text(lcd, "X %d" % profile.umbrellas, 96)
 	elif bag_item == BAG_TIME:
 		draw_text(lcd, "SPEED X%d" % speed, 96)
-	if bag_item == UMBRELLA:  # раскрывается сам — применять нечего
-		draw_text(lcd, "A NEXT", ICON_Y)
+	if bag_item in BUY_PRODUCTS:
+		if bag_action >= 0:  # подменю: USE / BUY Xn / GET X1 (реклама)
+			var labels := ["USE", "BUY X%d" % PACK_SIZES[bag_item], "GET X1 AD"]
+			for i in labels.size():
+				if i == bag_action:
+					lcd.blit(Sprites.ARROW_RIGHT, 14, 107 + i * 8)
+				draw_text(lcd, labels[i], 107 + i * 8, 20)
+			draw_text(lcd, "A NEXT  B OK", ICON_Y)
+		else:
+			draw_text(lcd, "A NEXT  B MENU", ICON_Y)
 		draw_text(lcd, "C BACK", ICON_Y + 9)
 		return
-	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT] else "SET" if bag_item == BAG_TIME else "USE"
+	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT] else "SET"
 	draw_text(lcd, "A NEXT  B %s" % action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)

@@ -39,6 +39,7 @@ func _initialize() -> void:
 	test_about()
 	test_tester_time()
 	test_moon()
+	test_shop_stubs()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -200,54 +201,54 @@ func test_game() -> void:
 	g.selected = Game.BAG
 	g.press_b()
 	check(g.mode == "bag", "сумка открылась")
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "no" and g.pills_left() == 5, "таблетка здоровому — отказ")
 	g.mode = "bag"
 	g.state.sick = true
 	g.state.fever = 8
 	g.state.poops = 1
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "no" and g.state.sick and g.state.fever == 8 and g.pills_left() == 5,
 			"кучки не убраны — последняя таблетка не лечит и не тратится")
 	g.mode = "bag"
 	g.state.fever = 25
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "heal" and g.state.sick and g.state.fever == 15 and g.pills_left() == 4,
 			"с кучками таблетка сбивает температуру, но не до конца")
 	g.state.poops = 0
 	g.state.fever = 8
 	g.mode = "bag"
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "heal" and not g.state.sick and g.pills_left() == 3, "после уборки таблетка вылечила")
 	g.state.sick = true
 	g.state.fever = 10.0000001
 	g.mode = "bag"
-	g.press_b()
+	_bag_use(g)
 	check(not g.state.sick and g.state.fever == 0.0, "остаток температуры 1e-7 — тоже вылечен")
 	g.state.pills_day = "2000-01-01"
 	g.state.pills_used = 5
 	check(g.pills_left() == 5, "новый день — снова 5 таблеток")
 	g.mode = "bag"
 	g.bag_item = Game.SYRINGE
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "no", "шприцев нет — отказ")
 	g.mode = "bag"
 	g.profile.syringes = 2
 	g.state.satiety = 10
-	g.press_b()
+	_bag_use(g)
 	check(g.state.satiety == 100 and g.profile.syringes == 1 and g.profile_changed, "шприц")
 	g.mode = "bag"
 	g.state.sick = true
 	g.state.poops = 2
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "no" and g.state.sick and g.profile.syringes == 1, "больного с кучками шприц не лечит и не тратится")
 	g.state.poops = 0
 	g.state.sick = false
 	g.mode = "bag"
 	g.bag_item = Game.BAG_SETTINGS
-	g.press_b()
+	_bag_use(g)
 	g.settings.quiet_start = 23
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "settings" and g.settings.quiet_start == 0 and g.settings_changed, "FROM 23 → 00")
 	g.press_c()
 	check(g.mode == "bag", "C из настроек → сумка")
@@ -445,6 +446,12 @@ func test_weather() -> void:
 	Weather.enabled = false
 	check(not Weather.is_rain(start + 60), "выключатель")
 
+
+
+## Применить расходник в сумке: подменю — строка USE — B.
+func _bag_use(g: Game) -> void:
+	g.bag_action = Game.ACTION_USE
+	g.press_b()
 
 # --- дождь и счастье ---
 
@@ -670,8 +677,8 @@ func test_umbrella_screens() -> void:
 		for x in Lcd.COLS:
 			shown = shown and (not clean.get_px(x, y) or lcd.get_px(x, y))
 	check(shown, "сумка: UMBRELLA и X 3")
-	g.press_b()
-	check(g.mode == "no" and g.profile.umbrellas == 3, "B на зонтике — отказ, запас не меняется")
+	_bag_use(g)
+	check(g.mode == "no" and g.profile.umbrellas == 3, "USE на зонтике — отказ, запас не меняется")
 	lcd.free()
 	clean.free()
 
@@ -837,11 +844,13 @@ func test_tester_time() -> void:
 	g.mode = "bag"
 	g.bag_item = Game.BAG_ABOUT
 	g.press_a()
-	check(g.bag_item == Game.PILL, "продакшен: после ABOUT — снова PILL, TIME нет")
-	g.tester = true
-	g.bag_item = Game.BAG_ABOUT
+	check(g.bag_item == Game.BAG_PREMIUM, "после ABOUT — PREMIUM")
 	g.press_a()
-	check(g.bag_item == Game.BAG_TIME, "тестовая сборка: после ABOUT — TIME")
+	check(g.bag_item == Game.PILL, "продакшен: после PREMIUM — снова PILL, TIME нет")
+	g.tester = true
+	g.bag_item = Game.BAG_PREMIUM
+	g.press_a()
+	check(g.bag_item == Game.BAG_TIME, "тестовая сборка: после PREMIUM — TIME")
 	var seen := []
 	for i in 4:
 		g.press_b()
@@ -876,3 +885,67 @@ func test_moon() -> void:
 	var d := _render(day, 0)
 	check(n[sun_ray] == 0 and n[moon_px] == 1, "02:00 при тихих 22–08 — луна, солнца нет")
 	check(d[sun_ray] == 1 and d[moon_px] == 0, "12:00 — солнце")
+
+
+# --- сумка: подменю USE / BUY / GET, ПРЕМИУМ ---
+
+func test_shop_stubs() -> void:
+	var g := Game.new(_adult())
+	g.tester = true
+	g.mode = "bag"
+	g.bag_item = Game.SYRINGE
+	g.press_b()
+	check(g.bag_action == Game.ACTION_USE and g.mode == "bag", "B на расходнике — подменю, строка USE")
+	g.press_a()
+	check(g.bag_action == Game.ACTION_BUY, "A в подменю — следующая строка")
+	g.press_b()
+	check(g.profile.syringes == 5 and g.profile_changed and g.mode == "bag", "BUY на SYRINGE → +5 шприцев")
+	g.bag_item = Game.PILL
+	g.bag_action = Game.ACTION_GET
+	g.press_b()
+	check(g.profile.pills == 1, "GET на PILL → +1 таблетка в запас")
+	g.press_c()
+	check(g.bag_action == -1 and g.mode == "bag", "C в подменю — к предметам")
+	g.press_c()
+	check(g.mode == "idle", "C в сумке — в комнату")
+
+	g.state.sick = true
+	g.state.fever = 40
+	g.state.pills_day = g._pill_day()
+	g.state.pills_used = Game.FREE_PILLS_PER_DAY
+	g.profile.pills = 20
+	g.mode = "bag"
+	g.bag_item = Game.PILL
+	_bag_use(g)
+	check(g.state.fever == 30 and g.profile.pills == 19, "бесплатные кончились — таблетка из запаса")
+
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.mode = "bag"
+	g.bag_item = Game.BAG_PREMIUM
+	g.render(lcd)
+	for line in [["PUPPY", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["A NEXT  B BUY", Game.ICON_Y]]:
+		g.draw_text(clean, line[0], line[1])
+	var shown := true
+	for i in clean.buf.size():
+		shown = shown and (not clean.buf[i] or lcd.buf[i])
+	check(shown, "страница PREMIUM: состав и B BUY")
+	var before := g.profile.pills
+	g.press_b()
+	check(g.profile.premium and Shop.is_unlocked(g.profile, Sprites.PETS.puppy) and g.profile.pills == before + 50
+			and g.profile.syringes == 30 and g.profile.umbrellas == 25, "PREMIUM куплен: PUPPY и 50/25/25")
+	g.press_b()
+	check(g.profile.pills == before + 50, "PREMIUM повторно ничего не даёт")
+	lcd.free()
+	clean.free()
+
+	var prod := Game.new(_adult())
+	prod.mode = "bag"
+	prod.bag_item = Game.UMBRELLA
+	prod.bag_action = Game.ACTION_BUY
+	prod.press_b()
+	check(prod.profile.umbrellas == 0 and prod.mode == "no", "продакшен: BUY — отказ")
+	prod.mode = "bag"
+	prod.bag_item = Game.BAG_PREMIUM
+	prod.press_b()
+	check(not prod.profile.premium and prod.mode == "no", "продакшен: PREMIUM — отказ")
