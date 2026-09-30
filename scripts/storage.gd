@@ -33,16 +33,18 @@ class Settings:
 
 ## Профиль игрока: принадлежит игроку, а не питомцу, и переживает его смерть.
 class Profile:
+	var pills := 0     # купленные таблетки: тратятся после 5 бесплатных в день
 	var syringes := 0
 	var umbrellas := 0  # раскрываются сами в начале дождя (Decay)
 	var owned_pets: Array[String] = []
 	var premium := false
 
 	func to_dict() -> Dictionary:
-		return {"syringes": syringes, "umbrellas": umbrellas, "owned_pets": owned_pets, "premium": premium}
+		return {"pills": pills, "syringes": syringes, "umbrellas": umbrellas, "owned_pets": owned_pets, "premium": premium}
 
 	static func from_dict(data: Dictionary) -> Profile:
 		var p := Profile.new()
+		p.pills = int(data.get("pills", 0))
 		p.syringes = int(data.get("syringes", 0))
 		p.umbrellas = int(data.get("umbrellas", 0))
 		p.owned_pets.assign(data.get("owned_pets", []))

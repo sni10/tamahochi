@@ -1,7 +1,7 @@
 extends Control
 ## Корпус: экран, три кнопки, клавиатура, игровой цикл и автосохранение (≙ app.py + main.py).
 ## Отладка: godot --path . -- --speed 60 | --grow 3600;
-## «покупки» (только debug): 1/G/П — ролик = шприц, 2 — пачка, 3 — Premium, 4 — показанный питомец, 5 — ролик = зонтик.
+## «покупки» (только debug): 1/G/П — ролик = шприц, 2 — пачка, 3 — Premium, 4 — показанный питомец, 5 — ролик = зонтик, 6 — ролик = таблетка.
 
 const SHELL := Color("#f2b8c6")
 const BEZEL := Color("#4a4458")
@@ -10,7 +10,7 @@ const BUTTON_PRESSED := Color("#d9b53a")
 const AUTOSAVE_SEC := 60.0
 
 const DEBUG_PURCHASES := {"1": Shop.AD_REWARD, "g": Shop.AD_REWARD, "п": Shop.AD_REWARD,
-		"2": Shop.SYRINGE_PACK, "3": Shop.PREMIUM, "4": "pet", "5": Shop.AD_UMBRELLA}
+		"2": Shop.SYRINGE_PACK, "3": Shop.PREMIUM, "4": "pet", "5": Shop.AD_UMBRELLA, "6": Shop.AD_PILL}
 ## Латиница и та же клавиша в русской раскладке, плюс стрелки/Enter/Esc.
 const KEYS := {"a": "a", "ф": "a", "b": "b", "и": "b", "c": "c", "с": "c"}
 const KEYCODES := {KEY_LEFT: "a", KEY_ENTER: "b", KEY_KP_ENTER: "b", KEY_ESCAPE: "c", KEY_RIGHT: "c"}
@@ -138,6 +138,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _press(action: String) -> void:
 	if action:
 		game.call(action)
+	if game.new_game_wanted:  # бросили питомца: без сохранения и без зова он не вернётся
+		game.new_game_wanted = false
+		Notifier.cancel()
+		DirAccess.remove_absolute(Storage.SAVE_PATH)
 	if game.feedback_wanted:
 		game.feedback_wanted = false
 		OS.shell_open(Game.feedback_mailto())  # почтовое приложение с готовым письмом

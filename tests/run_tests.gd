@@ -39,6 +39,9 @@ func _initialize() -> void:
 	test_about()
 	test_tester_time()
 	test_moon()
+	test_shop_stubs()
+	test_new_game()
+	test_no_play_in_rain()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -200,54 +203,54 @@ func test_game() -> void:
 	g.selected = Game.BAG
 	g.press_b()
 	check(g.mode == "bag", "сумка открылась")
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "no" and g.pills_left() == 5, "таблетка здоровому — отказ")
 	g.mode = "bag"
 	g.state.sick = true
 	g.state.fever = 8
 	g.state.poops = 1
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "no" and g.state.sick and g.state.fever == 8 and g.pills_left() == 5,
 			"кучки не убраны — последняя таблетка не лечит и не тратится")
 	g.mode = "bag"
 	g.state.fever = 25
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "heal" and g.state.sick and g.state.fever == 15 and g.pills_left() == 4,
 			"с кучками таблетка сбивает температуру, но не до конца")
 	g.state.poops = 0
 	g.state.fever = 8
 	g.mode = "bag"
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "heal" and not g.state.sick and g.pills_left() == 3, "после уборки таблетка вылечила")
 	g.state.sick = true
 	g.state.fever = 10.0000001
 	g.mode = "bag"
-	g.press_b()
+	_bag_use(g)
 	check(not g.state.sick and g.state.fever == 0.0, "остаток температуры 1e-7 — тоже вылечен")
 	g.state.pills_day = "2000-01-01"
 	g.state.pills_used = 5
 	check(g.pills_left() == 5, "новый день — снова 5 таблеток")
 	g.mode = "bag"
 	g.bag_item = Game.SYRINGE
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "no", "шприцев нет — отказ")
 	g.mode = "bag"
 	g.profile.syringes = 2
 	g.state.satiety = 10
-	g.press_b()
+	_bag_use(g)
 	check(g.state.satiety == 100 and g.profile.syringes == 1 and g.profile_changed, "шприц")
 	g.mode = "bag"
 	g.state.sick = true
 	g.state.poops = 2
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "no" and g.state.sick and g.profile.syringes == 1, "больного с кучками шприц не лечит и не тратится")
 	g.state.poops = 0
 	g.state.sick = false
 	g.mode = "bag"
 	g.bag_item = Game.BAG_SETTINGS
-	g.press_b()
+	_bag_use(g)
 	g.settings.quiet_start = 23
-	g.press_b()
+	_bag_use(g)
 	check(g.mode == "settings" and g.settings.quiet_start == 0 and g.settings_changed, "FROM 23 → 00")
 	g.press_c()
 	check(g.mode == "bag", "C из настроек → сумка")
@@ -308,9 +311,14 @@ func test_shop() -> void:
 	check(not Shop.is_unlocked(p, Sprites.PETS.cat), "CAT закрыт")
 	check(Shop.grant(p, "pet_cat") and Shop.is_unlocked(p, Sprites.PETS.cat), "pet_cat")
 	check(not Shop.grant(p, "pet_cat") and not Shop.grant(p, "pet_blob") and not Shop.grant(p, "pet_nope"), "повторы и бесплатный")
-	check(Shop.grant(p, Shop.PREMIUM) and p.syringes == 16, "premium")
-	check(not Shop.grant(p, Shop.PREMIUM) and p.syringes == 16, "premium второй раз ничего не даёт")
-	check(Shop.is_unlocked(p, Sprites.PETS.puppy), "premium открывает всех")
+	check(Shop.grant(p, Shop.PREMIUM) and p.syringes == 31 and p.pills == 50 and p.umbrellas == 25, "premium: +50 таблеток, +25 шприцев, +25 зонтиков")
+	check(not Shop.grant(p, Shop.PREMIUM) and p.syringes == 31 and p.pills == 50, "premium второй раз ничего не даёт")
+	var q := Storage.Profile.new()
+	Shop.grant(q, Shop.PREMIUM)
+	var all_open := true
+	for key in Sprites.PETS:
+		all_open = all_open and Shop.is_unlocked(q, Sprites.PETS[key])
+	check(all_open, "premium открывает всех питомцев")
 
 
 # --- следующий зов ---
@@ -414,28 +422,40 @@ func test_weather() -> void:
 	Weather.enabled = true
 	check(Weather.rain_of(2026, 1, 15) == Weather.rain_of(2026, 1, 15), "одна дата — один результат")
 	var ok := true
-	var rainy := 0
-	var infecting := 0
+	var short_n := 0
+	var short_inf := 0
+	var long_n := 0
+	var long_inf := 0
 	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
 	for i in 1000:
 		var d := Time.get_datetime_dict_from_unix_time(day + i * 86400)
 		var r := Weather.rain_of(d.year, d.month, d.day)
-		if r.is_empty():
-			continue
-		rainy += 1
-		infecting += int(r.infects)
-		ok = ok and r.hours >= 1 and r.hours <= 3 and r.start >= 6 and r.start <= 19 and r.start + r.hours <= 22
-	check(ok, "1000 дат: 0–1 дождь, 1–3 ч, старт 06–19, до 22:00")
-	check(rainy >= 200 and rainy <= 300, "дождливых дат 20–30%%: %d" % rainy)
-	check(infecting >= rainy * 0.7 and infecting <= rainy * 0.9, "заражающих 70–90%%: %d из %d" % [infecting, rainy])
-	var rd := _rain_day(1)
+		ok = ok and r.minutes >= 10 and r.minutes <= 30 and r.start >= 6 * 60 and r.start + r.minutes <= 22 * 60
+		if r.minutes <= 13:
+			short_n += 1
+			short_inf += int(r.infects)
+		elif r.minutes >= 27:
+			long_n += 1
+			long_inf += int(r.infects)
+	check(ok, "1000 дат: дождь каждый день, 10–30 мин, с 06:00, до 22:00")
+	check(short_n > 50 and long_n > 50, "есть и короткие, и длинные дожди: %d / %d" % [short_n, long_n])
+	check(short_inf >= short_n * 0.15 and short_inf <= short_n * 0.35, "короткие заражают 15–35%%: %d из %d" % [short_inf, short_n])
+	check(long_inf >= long_n * 0.65 and long_inf <= long_n * 0.9, "длинные заражают 65–90%%: %d из %d" % [long_inf, long_n])
+	check(is_equal_approx(Weather.infect_chance(10), 0.2) and is_equal_approx(Weather.infect_chance(30), 0.8), "шанс: 10 мин — 20%%, 30 мин — 80%%")
+	var rd := _rain_day(10)
 	var start := _at(rd[0], rd[1])
-	var hours: int = Weather.rain_at(start + 60).hours
-	check(Weather.is_rain(start + 60) and not Weather.is_rain(start + hours * HOUR + 60), "is_rain внутри и после дождя")
+	var minutes: int = Weather.rain_at(start + 60).minutes
+	check(Weather.is_rain(start + 60) and not Weather.is_rain(start + minutes * 60 + 60), "is_rain внутри и после дождя")
 	check(not Weather.is_rain(_at(rd[0], 3)), "ночью дождя нет")
 	Weather.enabled = false
 	check(not Weather.is_rain(start + 60), "выключатель")
 
+
+
+## Применить расходник в сумке: подменю — строка USE — B.
+func _bag_use(g: Game) -> void:
+	g.bag_action = Game.ACTION_USE
+	g.press_b()
 
 # --- дождь и счастье ---
 
@@ -444,15 +464,15 @@ func _at(d: Dictionary, hours: float) -> float:
 			"hour": 0, "minute": 0, "second": 0}) - Decay.tz_bias * 60 + hours * HOUR
 
 
-## Первая дата с 2026-01-01, где есть дождь не короче `hours` часов (и, если задано, заражающий
-## или нет): [дата, час начала].
-func _rain_day(hours: int, infects: Variant = null) -> Array:
+## Первая дата с 2026-01-01, где дождь не короче `minutes` минут (и, если задано, заражающий
+## или нет): [дата, начало в часах от полуночи].
+func _rain_day(minutes: int, infects: Variant = null) -> Array:
 	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
 	while true:
 		var d := Time.get_datetime_dict_from_unix_time(day)
 		var r := Weather.rain_of(d.year, d.month, d.day)
-		if r and r.hours >= hours and (infects == null or r.infects == infects):
-			return [d, r.start]
+		if r.minutes >= minutes and (infects == null or r.infects == infects):
+			return [d, r.start / 60.0]
 		day += 86400
 	return []
 
@@ -464,18 +484,16 @@ func test_rain() -> void:
 	old.rain_loss = 7.5
 	check(PetState.from_dict(old.to_dict()).rain_loss == 7.5, "rain_loss сохраняется")
 
-	var rd := _rain_day(3)
-	var start := _at(rd[0], rd[1])
+	var rd := _rain_day(30)
+	var start := _at(rd[0], rd[1]) - 60  # шаги по минуте: первый шаг заканчивается в первую минуту дождя
 	var s := _pet_at(start)
 	Decay.apply(s, HOUR)
-	check(is_equal_approx(s.happiness, 84), "1 ч дождя бодрствуя: −16, получили %s" % s.happiness)
-	s = _pet_at(start)
-	Decay.apply(s, 3 * HOUR - 60)
-	check(is_equal_approx(s.rain_loss, 15), "к концу дождя добавка упёрлась в 15")
-	Decay.apply(s, 60)
-	check(is_equal_approx(s.happiness, 61), "3 ч дождя: −39, получили %s" % s.happiness)
-	Decay.apply(s, HOUR)
+	check(is_equal_approx(s.happiness, 88), "час, из них 30 мин дождя: −12, получили %s" % s.happiness)
 	check(s.rain_loss == 0.0, "после дождя счётчик обнулился")
+	s = _pet_at(start)
+	s.rain_loss = 14
+	Decay.apply(s, 30 * 60)
+	check(is_equal_approx(s.rain_loss, 15), "лимит 15 за дождь: добавка упёрлась, получили %s" % s.rain_loss)
 
 	s = _pet_at(start)
 	s.sleeping = true
@@ -483,11 +501,11 @@ func test_rain() -> void:
 	check(s.happiness == 100.0, "ночной сон под дождём — счастье не меняется")
 
 	s = _pet_at(start)
-	Decay.apply(s, 2 * HOUR)
+	Decay.apply(s, 15 * 60)
 	s = PetState.from_dict(s.to_dict())  # «перезапуск» посреди дождя
 	var before := s.happiness
 	Decay.apply(s, 10 * 60)
-	check(is_equal_approx(before - s.happiness, 8.0 / 6) and s.rain_loss <= 15.0, "после перезапуска лимит 15 держится")
+	check(is_equal_approx(before - s.happiness, 2 * 8.0 / 6) and s.rain_loss <= 15.0, "после перезапуска дождь продолжается, лимит держится")
 	Weather.enabled = false
 
 
@@ -506,8 +524,8 @@ func test_rain_sky() -> void:
 	check(Sprites.RAIN_CLOUD != null and Sprites.RAIN[0].w == Sprites.RAIN[1].w and Sprites.RAIN[0].h == Sprites.RAIN[1].h,
 			"спрайты тучи и капель загружены, кадры одного размера")
 	Weather.enabled = true
-	var rd := _rain_day(1)
-	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 0.5)))
+	var rd := _rain_day(10)
+	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 5 / 60.0)))
 	g.state.age = 3 * 86400
 	var sunny := Game.new(_pet_at(_at(rd[0], 3)))  # 03:00 — дождей не бывает
 	sunny.settings.quiet_start = 0  # без тихих часов: иначе в 03:00 ночь и луна вместо солнца
@@ -567,17 +585,17 @@ func test_umbrella() -> void:
 	check(PetState.from_dict(st.to_dict()).rain_cover == "umbrella", "rain_cover сохраняется")
 
 	Weather.enabled = true
-	var wet := _rain_day(2, true)   # заражающий дождь не короче 2 ч (проверки идут внутри дождя)
-	var dry := _rain_day(1, false)  # незаражающий
+	var wet := _rain_day(20, true)  # заражающий дождь не короче 20 мин (проверки идут внутри дождя)
+	var dry := _rain_day(10, false)  # незаражающий
 	var start := _at(wet[0], wet[1])
 
-	var s := _pet_at(start)
+	var s := _pet_at(start - 60)
 	var p := _umbrellas(2)
-	Decay.apply(s, HOUR, [], 1.0, p)
-	check(p.umbrellas == 1 and s.rain_cover == "umbrella", "зонтик раскрылся сам: 2 → 1")
-	check(not s.sick and is_equal_approx(s.happiness, 92), "под зонтиком: здоров, счастье обычное (%s)" % s.happiness)
-	s = PetState.from_dict(s.to_dict())  # «перезапуск» посреди дождя
 	Decay.apply(s, 10 * 60, [], 1.0, p)
+	check(p.umbrellas == 1 and s.rain_cover == "umbrella", "зонтик раскрылся сам: 2 → 1")
+	check(not s.sick and is_equal_approx(s.happiness, 100 - 8.0 / 6), "под зонтиком: здоров, счастье обычное (%s)" % s.happiness)
+	s = PetState.from_dict(s.to_dict())  # «перезапуск» посреди дождя
+	Decay.apply(s, 5 * 60, [], 1.0, p)
 	check(p.umbrellas == 1, "перезапуск посреди дождя — второй зонтик не тратится")
 
 	s = _pet_at(start)
@@ -629,8 +647,8 @@ func test_umbrella() -> void:
 func test_umbrella_screens() -> void:
 	check(Sprites.UMBRELLA != null and Sprites.ITEM_UMBRELLA != null and Sprites.ITEM_UMBRELLA.w == 12, "спрайты зонтика загружены")
 	Weather.enabled = true
-	var rd := _rain_day(2)
-	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 0.5)))
+	var rd := _rain_day(20)
+	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 5 / 60.0)))
 	g.state.rain_cover = "none"
 	var bare := _render(g, 0)
 	g.state.rain_cover = "umbrella"
@@ -663,16 +681,24 @@ func test_umbrella_screens() -> void:
 		for x in Lcd.COLS:
 			shown = shown and (not clean.get_px(x, y) or lcd.get_px(x, y))
 	check(shown, "сумка: UMBRELLA и X 3")
-	g.press_b()
-	check(g.mode == "no" and g.profile.umbrellas == 3, "B на зонтике — отказ, запас не меняется")
+	_bag_use(g)
+	check(g.mode == "no" and g.profile.umbrellas == 3, "USE на зонтике — отказ, запас не меняется")
 	lcd.free()
 	clean.free()
 
 	var p := Storage.Profile.new()
 	check(Shop.grant(p, Shop.AD_UMBRELLA) and p.umbrellas == 1, "ad_umbrella: +1")
-	check(Shop.grant(p, Shop.SYRINGE_PACK) and p.umbrellas == 6, "syringe_pack: +5 зонтиков")
-	check(Shop.grant(p, Shop.PREMIUM) and p.umbrellas == 16, "premium: +10 зонтиков")
-	check(not Shop.grant(p, Shop.PREMIUM) and p.umbrellas == 16, "повторный premium — без зонтиков")
+	check(Shop.grant(p, Shop.UMBRELLA_PACK) and p.umbrellas == 6, "umbrella_pack: +5 зонтиков")
+	check(Shop.grant(p, Shop.SYRINGE_PACK) and p.umbrellas == 6 and p.syringes == 5, "syringe_pack: +5 шприцев, без зонтиков")
+	check(Shop.grant(p, Shop.PILL_PACK) and p.pills == 20, "pill_pack: +20 таблеток")
+	check(Shop.grant(p, Shop.AD_PILL) and p.pills == 21, "ad_pill: +1 таблетка")
+	check(Storage.Profile.from_dict({"syringes": 1}).pills == 0, "старый player.json без таблеток → 0")
+	check(Storage.Profile.from_dict(p.to_dict()).pills == 21, "запас таблеток сохраняется")
+	var q := Storage.Profile.new()
+	check(Store.buy(q, Shop.SYRINGE_PACK, true) and q.syringes == 5, "Store в тестовой сборке: покупка выдаёт")
+	check(Store.watch_ad(q, Shop.AD_PILL, true) and q.pills == 1, "Store в тестовой сборке: реклама выдаёт")
+	check(not Store.buy(q, Shop.PREMIUM, false) and not q.premium, "Store в продакшене: Premium не выдаётся")
+	check(not Store.watch_ad(q, Shop.AD_UMBRELLA, false) and q.umbrellas == 0, "Store в продакшене: реклама не выдаёт")
 
 
 # --- уведомления (зов игрока) ---
@@ -822,11 +848,15 @@ func test_tester_time() -> void:
 	g.mode = "bag"
 	g.bag_item = Game.BAG_ABOUT
 	g.press_a()
-	check(g.bag_item == Game.PILL, "продакшен: после ABOUT — снова PILL, TIME нет")
-	g.tester = true
-	g.bag_item = Game.BAG_ABOUT
+	check(g.bag_item == Game.BAG_NEW, "после ABOUT — NEW GAME")
 	g.press_a()
-	check(g.bag_item == Game.BAG_TIME, "тестовая сборка: после ABOUT — TIME")
+	check(g.bag_item == Game.BAG_PREMIUM, "после NEW GAME — PREMIUM")
+	g.press_a()
+	check(g.bag_item == Game.PILL, "продакшен: после PREMIUM — снова PILL, TIME нет")
+	g.tester = true
+	g.bag_item = Game.BAG_PREMIUM
+	g.press_a()
+	check(g.bag_item == Game.BAG_TIME, "тестовая сборка: после PREMIUM — TIME")
 	var seen := []
 	for i in 4:
 		g.press_b()
@@ -861,3 +891,118 @@ func test_moon() -> void:
 	var d := _render(day, 0)
 	check(n[sun_ray] == 0 and n[moon_px] == 1, "02:00 при тихих 22–08 — луна, солнца нет")
 	check(d[sun_ray] == 1 and d[moon_px] == 0, "12:00 — солнце")
+
+
+# --- сумка: подменю USE / BUY / GET, ПРЕМИУМ ---
+
+func test_shop_stubs() -> void:
+	var g := Game.new(_adult())
+	g.tester = true
+	g.mode = "bag"
+	g.bag_item = Game.SYRINGE
+	g.press_b()
+	check(g.bag_action == Game.ACTION_USE and g.mode == "bag", "B на расходнике — подменю, строка USE")
+	g.press_a()
+	check(g.bag_action == Game.ACTION_BUY, "A в подменю — следующая строка")
+	g.press_b()
+	check(g.profile.syringes == 5 and g.profile_changed and g.mode == "bag", "BUY на SYRINGE → +5 шприцев")
+	g.bag_item = Game.PILL
+	g.bag_action = Game.ACTION_GET
+	g.press_b()
+	check(g.profile.pills == 1, "GET на PILL → +1 таблетка в запас")
+	g.press_c()
+	check(g.bag_action == -1 and g.mode == "bag", "C в подменю — к предметам")
+	g.press_c()
+	check(g.mode == "idle", "C в сумке — в комнату")
+
+	g.state.sick = true
+	g.state.fever = 40
+	g.state.pills_day = g._pill_day()
+	g.state.pills_used = Game.FREE_PILLS_PER_DAY
+	g.profile.pills = 20
+	g.mode = "bag"
+	g.bag_item = Game.PILL
+	_bag_use(g)
+	check(g.state.fever == 30 and g.profile.pills == 19, "бесплатные кончились — таблетка из запаса")
+
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.mode = "bag"
+	g.bag_item = Game.BAG_PREMIUM
+	g.render(lcd)
+	for line in [["ALL PETS", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["A NEXT  B BUY", Game.ICON_Y]]:
+		g.draw_text(clean, line[0], line[1])
+	var shown := true
+	for i in clean.buf.size():
+		shown = shown and (not clean.buf[i] or lcd.buf[i])
+	check(shown, "страница PREMIUM: состав и B BUY")
+	var before := g.profile.pills
+	g.press_b()
+	check(g.profile.premium and Shop.is_unlocked(g.profile, Sprites.PETS.cat) and g.profile.pills == before + 50
+			and g.profile.syringes == 30 and g.profile.umbrellas == 25, "PREMIUM куплен: все питомцы и 50/25/25")
+	g.press_b()
+	check(g.profile.pills == before + 50, "PREMIUM повторно ничего не даёт")
+	lcd.free()
+	clean.free()
+
+	var prod := Game.new(_adult())
+	prod.mode = "bag"
+	prod.bag_item = Game.UMBRELLA
+	prod.bag_action = Game.ACTION_BUY
+	prod.press_b()
+	check(prod.profile.umbrellas == 0 and prod.mode == "no", "продакшен: BUY — отказ")
+	prod.mode = "bag"
+	prod.bag_item = Game.BAG_PREMIUM
+	prod.press_b()
+	check(not prod.profile.premium and prod.mode == "no", "продакшен: PREMIUM — отказ")
+
+
+# --- новая игра ---
+
+func test_new_game() -> void:
+	var s := _adult()
+	s.species = "cat"
+	var g := Game.new(s)
+	g.profile.syringes = 3
+	g.mode = "bag"
+	g.bag_item = Game.BAG_NEW
+	g.press_b()
+	check(g.mode == "abandon", "NEW GAME → экран подтверждения")
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.render(lcd)
+	for line in [["NEW GAME", 15], ["YOU WILL LEAVE", 44], ["YOUR PET", 53], ["B CONFIRM", Game.ICON_Y]]:
+		g.draw_text(clean, line[0], line[1])
+	var shown := true
+	for i in clean.buf.size():
+		shown = shown and (not clean.buf[i] or lcd.buf[i])
+	check(shown and lcd.buf != clean.buf, "экран подтверждения: текст и грустный питомец")
+	lcd.free()
+	clean.free()
+	g.press_a()
+	check(g.mode == "abandon", "A на подтверждении ничего не делает")
+	g.press_c()
+	check(g.mode == "bag" and g.bag_item == Game.BAG_NEW and g.state.species == "cat", "C — назад в сумку, питомец прежний")
+	g.press_b()
+	g.press_b()
+	check(g.mode == "select" and g.new_game_wanted and Sprites.PETS.keys()[g.choice] == "cat" and not g.savable(),
+			"B CONFIRM — экран выбора на том же виде, сохранять нечего")
+	check(g.profile.syringes == 3, "профиль сохранён")
+
+
+# --- в дождь не играет ---
+
+func test_no_play_in_rain() -> void:
+	Weather.enabled = true
+	var rd := _rain_day(10)
+	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 3 / 60.0)))
+	g.state.happiness = 50
+	g.selected = Game.PLAY
+	g.press_b()
+	check(g.mode == "no" and g.state.happiness == 50 and g.state.energy == 100, "в дождь от игры отказ")
+	g = Game.new(_pet_at(_at(rd[0], 3)))
+	g.state.happiness = 50
+	g.selected = Game.PLAY
+	g.press_b()
+	check(g.mode == "play" and g.state.happiness == 70, "без дождя играет")
+	Weather.enabled = false
