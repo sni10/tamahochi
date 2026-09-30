@@ -420,8 +420,9 @@ func test_age() -> void:
 
 func test_weather() -> void:
 	Weather.enabled = true
-	check(Weather.rain_of(2026, 1, 15) == Weather.rain_of(2026, 1, 15), "одна дата — один результат")
+	check(Weather.rains_of(2026, 1, 15) == Weather.rains_of(2026, 1, 15), "одна дата — один результат")
 	var ok := true
+	var counts := {1: 0, 2: 0}
 	var short_n := 0
 	var short_inf := 0
 	var long_n := 0
@@ -429,19 +430,26 @@ func test_weather() -> void:
 	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
 	for i in 1000:
 		var d := Time.get_datetime_dict_from_unix_time(day + i * 86400)
-		var r := Weather.rain_of(d.year, d.month, d.day)
-		ok = ok and r.minutes >= 10 and r.minutes <= 30 and r.start >= 6 * 60 and r.start + r.minutes <= 22 * 60
-		if r.minutes <= 13:
-			short_n += 1
-			short_inf += int(r.infects)
-		elif r.minutes >= 27:
-			long_n += 1
-			long_inf += int(r.infects)
-	check(ok, "1000 дат: дождь каждый день, 10–30 мин, с 06:00, до 22:00")
+		var rs := Weather.rains_of(d.year, d.month, d.day)
+		ok = ok and rs.size() in [1, 2]
+		counts[rs.size()] = counts.get(rs.size(), 0) + 1
+		var prev_end := 0
+		for r in rs:
+			var in_window: bool = (r.start >= 6 * 60 and r.start < 13 * 60) or (r.start >= 14 * 60 and r.start < 21 * 60)
+			ok = ok and r.minutes >= 20 and r.minutes <= 60 and in_window and r.start >= prev_end and r.start + r.minutes <= 22 * 60
+			prev_end = r.start + r.minutes
+			if r.minutes <= 25:
+				short_n += 1
+				short_inf += int(r.infects)
+			elif r.minutes >= 55:
+				long_n += 1
+				long_inf += int(r.infects)
+	check(ok, "1000 дат: 1–2 дождя, 20–60 мин, в своих окнах, без пересечений, до 22:00")
+	check(counts[1] > 300 and counts[2] > 300, "бывает и 1, и 2 дождя: %s" % [counts])
 	check(short_n > 50 and long_n > 50, "есть и короткие, и длинные дожди: %d / %d" % [short_n, long_n])
 	check(short_inf >= short_n * 0.15 and short_inf <= short_n * 0.35, "короткие заражают 15–35%%: %d из %d" % [short_inf, short_n])
 	check(long_inf >= long_n * 0.65 and long_inf <= long_n * 0.9, "длинные заражают 65–90%%: %d из %d" % [long_inf, long_n])
-	check(is_equal_approx(Weather.infect_chance(10), 0.2) and is_equal_approx(Weather.infect_chance(30), 0.8), "шанс: 10 мин — 20%%, 30 мин — 80%%")
+	check(is_equal_approx(Weather.infect_chance(20), 0.2) and is_equal_approx(Weather.infect_chance(60), 0.8), "шанс: 20 мин — 20%%, 60 мин — 80%%")
 	var rd := _rain_day(10)
 	var start := _at(rd[0], rd[1])
 	var minutes: int = Weather.rain_at(start + 60).minutes
@@ -464,15 +472,16 @@ func _at(d: Dictionary, hours: float) -> float:
 			"hour": 0, "minute": 0, "second": 0}) - Decay.tz_bias * 60 + hours * HOUR
 
 
-## Первая дата с 2026-01-01, где дождь не короче `minutes` минут (и, если задано, заражающий
-## или нет): [дата, начало в часах от полуночи].
-func _rain_day(minutes: int, infects: Variant = null) -> Array:
+## Первый с 2026-01-01 дождь не короче `minutes` минут (ровно `minutes`, если exact; и, если задано,
+## заражающий или нет): [дата, начало в часах от полуночи].
+func _rain_day(minutes: int, infects: Variant = null, exact := false) -> Array:
 	var day := Time.get_unix_time_from_datetime_string("2026-01-01T00:00:00")
 	while true:
 		var d := Time.get_datetime_dict_from_unix_time(day)
-		var r := Weather.rain_of(d.year, d.month, d.day)
-		if r.minutes >= minutes and (infects == null or r.infects == infects):
-			return [d, r.start / 60.0]
+		for r in Weather.rains_of(d.year, d.month, d.day):
+			var fits: bool = r.minutes == minutes if exact else r.minutes >= minutes
+			if fits and (infects == null or r.infects == infects):
+				return [d, r.start / 60.0]
 		day += 86400
 	return []
 
@@ -484,7 +493,7 @@ func test_rain() -> void:
 	old.rain_loss = 7.5
 	check(PetState.from_dict(old.to_dict()).rain_loss == 7.5, "rain_loss сохраняется")
 
-	var rd := _rain_day(30)
+	var rd := _rain_day(30, null, true)  # ровно 30 минут — на этом построена арифметика счастья
 	var start := _at(rd[0], rd[1]) - 60  # шаги по минуте: первый шаг заканчивается в первую минуту дождя
 	var s := _pet_at(start)
 	Decay.apply(s, HOUR)
