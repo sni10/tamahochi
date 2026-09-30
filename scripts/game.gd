@@ -160,13 +160,14 @@ func ask_notify() -> void:
 
 # --- время ---
 
-func tick(now := Time.get_unix_time_from_system()) -> void:
+## real_time — досчёт времени, пока игра была свёрнута: 1:1, без ускорения TIME.
+func tick(now := Time.get_unix_time_from_system(), real_time := false) -> void:
 	frame += 1
 	if mode == "select" or mode == "notify_ask":
 		return  # время догонит первый тик после экрана разрешения
 	var stage_before := state.stage
 	var umbrellas_before := profile.umbrellas
-	Decay.advance(state, now, speed, settings.quiet(), grow, profile)
+	Decay.advance(state, now, 1.0 if real_time else speed, settings.quiet(), grow, profile)
 	if profile.umbrellas != umbrellas_before:
 		profile_changed = true  # зонтик раскрылся сам — main.gd сохранит профиль
 	pet_x = mini(pet_x, _max_pet_x())

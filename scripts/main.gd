@@ -197,9 +197,13 @@ func _leave() -> void:
 	_save()
 
 
-## Игрок вернулся: отменить зов, оштрафовать за проигнорированный — до досчёта времени (он в ближайшем тике).
+## Игрок вернулся: отменить зов, оштрафовать за проигнорированный — до досчёта времени,
+## затем досчитать время в фоне 1:1 (TIME ускоряет только открытую игру, зов планировался 1:1).
 func _come_back() -> void:
 	Notifier.cancel()
 	if game.savable():
-		Calls.punish_ignored(game.state, game.settings.quiet(), Time.get_unix_time_from_system())
+		var now := Time.get_unix_time_from_system()
+		Calls.punish_ignored(game.state, game.settings.quiet(), now)
+		game.tick(now, true)
+		_press("")  # сохранить профиль (зонтик) и перерисовать
 		Storage.save_pet(game.state)

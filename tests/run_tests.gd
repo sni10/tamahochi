@@ -762,6 +762,13 @@ func test_notifications() -> void:
 	check(s.care_mistakes == 0, "зов в тихие часы — штрафа нет")
 	check(PetState.from_dict({"stage": "adult_normal"}).pending_call_at == 0.0, "старый save.json → зова нет")
 
+	# TIME ×60: время в фоне досчитывается 1:1, иначе питомец «проживёт» в 60 раз больше, чем планировал зов.
+	var g := Game.new(_pet_at(_local(12)), 60.0, null, 1.0, Storage.Profile.new())
+	g.tick(_local(13), true)
+	check(g.state.clock == _local(13), "возврат из фона при ×60 — досчёт 1:1")
+	g.tick(_local(13) + 60)
+	check(g.state.clock == _local(14), "открытая игра — ×60")
+
 
 
 func test_call_rain_growth() -> void:
