@@ -41,6 +41,7 @@ func _initialize() -> void:
 	test_moon()
 	test_shop_stubs()
 	test_new_game()
+	test_no_play_in_rain()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -312,10 +313,12 @@ func test_shop() -> void:
 	check(not Shop.grant(p, "pet_cat") and not Shop.grant(p, "pet_blob") and not Shop.grant(p, "pet_nope"), "повторы и бесплатный")
 	check(Shop.grant(p, Shop.PREMIUM) and p.syringes == 31 and p.pills == 50 and p.umbrellas == 25, "premium: +50 таблеток, +25 шприцев, +25 зонтиков")
 	check(not Shop.grant(p, Shop.PREMIUM) and p.syringes == 31 and p.pills == 50, "premium второй раз ничего не даёт")
-	check(Shop.is_unlocked(p, Sprites.PETS.puppy), "premium открывает PUPPY")
 	var q := Storage.Profile.new()
 	Shop.grant(q, Shop.PREMIUM)
-	check(not Shop.is_unlocked(q, Sprites.PETS.cat), "premium не открывает остальных — только PUPPY")
+	var all_open := true
+	for key in Sprites.PETS:
+		all_open = all_open and Shop.is_unlocked(q, Sprites.PETS[key])
+	check(all_open, "premium открывает всех питомцев")
 
 
 # --- следующий зов ---
@@ -927,7 +930,7 @@ func test_shop_stubs() -> void:
 	g.mode = "bag"
 	g.bag_item = Game.BAG_PREMIUM
 	g.render(lcd)
-	for line in [["PUPPY", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["A NEXT  B BUY", Game.ICON_Y]]:
+	for line in [["ALL PETS", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["A NEXT  B BUY", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -935,8 +938,8 @@ func test_shop_stubs() -> void:
 	check(shown, "страница PREMIUM: состав и B BUY")
 	var before := g.profile.pills
 	g.press_b()
-	check(g.profile.premium and Shop.is_unlocked(g.profile, Sprites.PETS.puppy) and g.profile.pills == before + 50
-			and g.profile.syringes == 30 and g.profile.umbrellas == 25, "PREMIUM куплен: PUPPY и 50/25/25")
+	check(g.profile.premium and Shop.is_unlocked(g.profile, Sprites.PETS.cat) and g.profile.pills == before + 50
+			and g.profile.syringes == 30 and g.profile.umbrellas == 25, "PREMIUM куплен: все питомцы и 50/25/25")
 	g.press_b()
 	check(g.profile.pills == before + 50, "PREMIUM повторно ничего не даёт")
 	lcd.free()
@@ -985,3 +988,21 @@ func test_new_game() -> void:
 	check(g.mode == "select" and g.new_game_wanted and Sprites.PETS.keys()[g.choice] == "cat" and not g.savable(),
 			"B CONFIRM — экран выбора на том же виде, сохранять нечего")
 	check(g.profile.syringes == 3, "профиль сохранён")
+
+
+# --- в дождь не играет ---
+
+func test_no_play_in_rain() -> void:
+	Weather.enabled = true
+	var rd := _rain_day(10)
+	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 3 / 60.0)))
+	g.state.happiness = 50
+	g.selected = Game.PLAY
+	g.press_b()
+	check(g.mode == "no" and g.state.happiness == 50 and g.state.energy == 100, "в дождь от игры отказ")
+	g = Game.new(_pet_at(_at(rd[0], 3)))
+	g.state.happiness = 50
+	g.selected = Game.PLAY
+	g.press_b()
+	check(g.mode == "play" and g.state.happiness == 70, "без дождя играет")
+	Weather.enabled = false

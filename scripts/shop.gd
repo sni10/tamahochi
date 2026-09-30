@@ -5,7 +5,6 @@ class_name Shop
 const PILL_PACK_SIZE := 20
 const SYRINGE_PACK_SIZE := 5
 const UMBRELLA_PACK_SIZE := 5
-const PREMIUM_PET := "puppy"
 const PREMIUM_PILLS := 50
 const PREMIUM_SYRINGES := 25
 const PREMIUM_UMBRELLAS := 25
@@ -16,7 +15,7 @@ const AD_UMBRELLA := "ad_umbrella"      # рекламный ролик — 1 з
 const PILL_PACK := "pill_pack"          # consumable: наборы можно покупать снова
 const SYRINGE_PACK := "syringe_pack"
 const UMBRELLA_PACK := "umbrella_pack"
-const PREMIUM := "premium"              # non-consumable: PUPPY + 50 таблеток, 25 шприцев, 25 зонтиков
+const PREMIUM := "premium"              # non-consumable: все питомцы (и будущие) + 50 таблеток, 25 шприцев, 25 зонтиков
 const PET_PREFIX := "pet_"              # non-consumable: pet_cat, pet_bunny, ...
 
 
@@ -25,7 +24,7 @@ static func pet_product(key: String) -> String:
 
 
 static func is_unlocked(profile: Storage.Profile, skin: Sprites.PetSkin) -> bool:
-	return skin.free or skin.key in profile.owned_pets
+	return skin.free or profile.premium or skin.key in profile.owned_pets
 
 
 ## Выдать купленное. true — что-то изменилось; повторная выдача non-consumable ничего не удваивает.
@@ -46,9 +45,7 @@ static func grant(profile: Storage.Profile, product_id: String) -> bool:
 		PREMIUM:
 			if profile.premium:
 				return false
-			profile.premium = true
-			if PREMIUM_PET not in profile.owned_pets:
-				profile.owned_pets.append(PREMIUM_PET)
+			profile.premium = true  # открывает всех питомцев — см. is_unlocked
 			profile.pills += PREMIUM_PILLS
 			profile.syringes += PREMIUM_SYRINGES
 			profile.umbrellas += PREMIUM_UMBRELLAS

@@ -320,7 +320,7 @@ func press_b() -> void:
 			s.digestion += FEED_DIGESTION
 			_set_mode("eat")
 	elif selected == PLAY:
-		if s.energy < TIRED_THRESHOLD or s.sick:
+		if s.energy < TIRED_THRESHOLD or s.sick or Weather.is_rain(s.clock):  # в дождь не играет
 			_set_mode("no")
 		else:
 			s.happiness = minf(100.0, s.happiness + PLAY_JOY)
@@ -806,7 +806,7 @@ func _draw_bag(lcd: Lcd) -> void:
 	lcd.blit(Sprites.ARROW_RIGHT, COLS - 8 - Sprites.ARROW_RIGHT.w, 58)
 	draw_text(lcd, BAG_NAMES[bag_item], 84)
 	if bag_item == BAG_PREMIUM:
-		var lines := ["PUPPY", "%d PILLS" % Shop.PREMIUM_PILLS, "%d SYRINGES" % Shop.PREMIUM_SYRINGES, "%d UMBRELLAS" % Shop.PREMIUM_UMBRELLAS]
+		var lines := ["ALL PETS", "%d PILLS" % Shop.PREMIUM_PILLS, "%d SYRINGES" % Shop.PREMIUM_SYRINGES, "%d UMBRELLAS" % Shop.PREMIUM_UMBRELLAS]
 		for i in lines.size():
 			draw_text(lcd, lines[i], 95 + i * 8)
 		draw_text(lcd, "OWNED" if profile.premium else "A NEXT  B BUY", ICON_Y)
