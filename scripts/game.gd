@@ -38,8 +38,8 @@ enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
 enum { FIELD_FROM, FIELD_TO, FIELD_CALLS, FIELD_SOUND }
 const SETTINGS_FIELDS := 4
-enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT, BAG_PREMIUM, BAG_TIME }
-const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT", "PREMIUM", "TIME"]  # TIME — только tester
+enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT, BAG_NEW, BAG_PREMIUM, BAG_TIME }
+const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT", "NEW GAME", "PREMIUM", "TIME"]  # TIME — только tester
 ## Подменю расходника (B на PILL/SYRINGE/UMBRELLA): применить, купить набор, получить за рекламу.
 enum { ACTION_USE, ACTION_BUY, ACTION_GET }
 const ACTION_NAMES := ["USE", "BUY", "GET"]
@@ -73,6 +73,7 @@ var settings_field := 0          # поле экрана настроек: FIELD
 var settings_note := ""          # короткая надпись на экране настроек (NOT HERE), до следующего нажатия
 var open_notify_settings_wanted := false  # main.gd открывает системные настройки уведомлений
 var tester := false  # тестовая сборка: в сумке есть TIME (main.gd)
+var new_game_wanted := false  # main.gd удаляет сохранение прежнего питомца и отменяет зов
 var feedback_wanted := false  # main.gd открывает письмо разработчику (feedback_mailto)
 var settings_changed := false    # main.gd сохраняет настройки и сбрасывает флаг
 var profile: Storage.Profile
@@ -123,7 +124,7 @@ func _icons() -> Array:
 
 
 func _bag_icons() -> Array:
-	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT, Sprites.ICON_PREMIUM, Sprites.ICON_TIME]
+	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT, Sprites.ICON_NEW, Sprites.ICON_PREMIUM, Sprites.ICON_TIME]
 
 
 func _is_birth() -> bool:
@@ -225,7 +226,7 @@ func _walk() -> void:
 
 ## Выбор следующей иконки (на экране выбора — предыдущий питомец).
 func press_a() -> void:
-	if mode == "notify_ask" or mode == "about":
+	if mode in ["notify_ask", "about", "abandon"]:
 		return
 	if mode == "select":
 		choice = posmod(choice - 1, Sprites.PETS.size())
@@ -247,6 +248,12 @@ func press_a() -> void:
 
 ## Подтверждение выбранного действия.
 func press_b() -> void:
+	if mode == "abandon":  # новая игра: как после смерти — на выбор, но прежнего питомца удаляем
+		new_game_wanted = true
+		choice = maxi(0, Sprites.PETS.keys().find(state.species))
+		selected = -1
+		_set_mode("select")
+		return
 	if mode == "about":
 		feedback_wanted = true
 		return
@@ -324,7 +331,7 @@ func press_b() -> void:
 
 ## Отмена: снять выбор (на экране выбора — следующий питомец).
 func press_c() -> void:
-	if mode == "about":
+	if mode == "about" or mode == "abandon":
 		_set_mode("bag")
 		return
 	if mode == "notify_ask":
@@ -368,6 +375,9 @@ func _use_bag_item() -> void:
 		return
 	if bag_item == BAG_ABOUT:
 		_set_mode("about")
+		return
+	if bag_item == BAG_NEW:
+		_set_mode("abandon")  # экран подтверждения: бросить питомца
 		return
 	if bag_item == BAG_TIME:  # следующая скорость по кругу; нестандартная (--speed) → ×1
 		speed = TIME_SPEEDS[(TIME_SPEEDS.find(speed) + 1) % TIME_SPEEDS.size()]
@@ -440,7 +450,7 @@ func render(lcd: Lcd) -> void:
 	lcd.clear()
 	_dotted(lcd, SEPARATOR_TOP)
 	_dotted(lcd, SEPARATOR_BOTTOM)
-	if mode in ["settings", "bag", "notify_ask", "about"]:
+	if mode in ["settings", "bag", "notify_ask", "about", "abandon"]:
 		call("_draw_" + mode, lcd)
 		lcd.flush()
 		return
@@ -774,6 +784,18 @@ func _draw_about(lcd: Lcd) -> void:
 	draw_text(lcd, "C BACK", ICON_Y + 9)
 
 
+# --- экран «новая игра» ---
+
+func _draw_abandon(lcd: Lcd) -> void:
+	draw_text(lcd, "NEW GAME", 15)
+	draw_text(lcd, "YOU WILL LEAVE", 44)
+	draw_text(lcd, "YOUR PET", 53)
+	var sad: Sprites.Sprite = look().sad[frame % 2]
+	lcd.blit(sad, _center_for(sad.w), 112 - sad.h)
+	draw_text(lcd, "B CONFIRM", ICON_Y)
+	draw_text(lcd, "C BACK", ICON_Y + 9)
+
+
 # --- экран сумки ---
 
 func _draw_bag(lcd: Lcd) -> void:
@@ -810,6 +832,6 @@ func _draw_bag(lcd: Lcd) -> void:
 			draw_text(lcd, "A NEXT  B MENU", ICON_Y)
 		draw_text(lcd, "C BACK", ICON_Y + 9)
 		return
-	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT] else "SET"
+	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT, BAG_NEW] else "SET"
 	draw_text(lcd, "A NEXT  B %s" % action, ICON_Y)
 	draw_text(lcd, "C BACK", ICON_Y + 9)

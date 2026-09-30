@@ -138,6 +138,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _press(action: String) -> void:
 	if action:
 		game.call(action)
+	if game.new_game_wanted:  # бросили питомца: без сохранения и без зова он не вернётся
+		game.new_game_wanted = false
+		Notifier.cancel()
+		DirAccess.remove_absolute(Storage.SAVE_PATH)
 	if game.feedback_wanted:
 		game.feedback_wanted = false
 		OS.shell_open(Game.feedback_mailto())  # почтовое приложение с готовым письмом

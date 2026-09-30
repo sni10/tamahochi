@@ -40,6 +40,7 @@ func _initialize() -> void:
 	test_tester_time()
 	test_moon()
 	test_shop_stubs()
+	test_new_game()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -844,7 +845,9 @@ func test_tester_time() -> void:
 	g.mode = "bag"
 	g.bag_item = Game.BAG_ABOUT
 	g.press_a()
-	check(g.bag_item == Game.BAG_PREMIUM, "после ABOUT — PREMIUM")
+	check(g.bag_item == Game.BAG_NEW, "после ABOUT — NEW GAME")
+	g.press_a()
+	check(g.bag_item == Game.BAG_PREMIUM, "после NEW GAME — PREMIUM")
 	g.press_a()
 	check(g.bag_item == Game.PILL, "продакшен: после PREMIUM — снова PILL, TIME нет")
 	g.tester = true
@@ -949,3 +952,36 @@ func test_shop_stubs() -> void:
 	prod.bag_item = Game.BAG_PREMIUM
 	prod.press_b()
 	check(not prod.profile.premium and prod.mode == "no", "продакшен: PREMIUM — отказ")
+
+
+# --- новая игра ---
+
+func test_new_game() -> void:
+	var s := _adult()
+	s.species = "cat"
+	var g := Game.new(s)
+	g.profile.syringes = 3
+	g.mode = "bag"
+	g.bag_item = Game.BAG_NEW
+	g.press_b()
+	check(g.mode == "abandon", "NEW GAME → экран подтверждения")
+	var lcd := Lcd.new()
+	var clean := Lcd.new()
+	g.render(lcd)
+	for line in [["NEW GAME", 15], ["YOU WILL LEAVE", 44], ["YOUR PET", 53], ["B CONFIRM", Game.ICON_Y]]:
+		g.draw_text(clean, line[0], line[1])
+	var shown := true
+	for i in clean.buf.size():
+		shown = shown and (not clean.buf[i] or lcd.buf[i])
+	check(shown and lcd.buf != clean.buf, "экран подтверждения: текст и грустный питомец")
+	lcd.free()
+	clean.free()
+	g.press_a()
+	check(g.mode == "abandon", "A на подтверждении ничего не делает")
+	g.press_c()
+	check(g.mode == "bag" and g.bag_item == Game.BAG_NEW and g.state.species == "cat", "C — назад в сумку, питомец прежний")
+	g.press_b()
+	g.press_b()
+	check(g.mode == "select" and g.new_game_wanted and Sprites.PETS.keys()[g.choice] == "cat" and not g.savable(),
+			"B CONFIRM — экран выбора на том же виде, сохранять нечего")
+	check(g.profile.syringes == 3, "профиль сохранён")
