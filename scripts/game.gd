@@ -585,7 +585,10 @@ func _draw_pet(lcd: Lcd, x: int) -> void:
 func _draw_umbrella(lcd: Lcd, x: int, y: int, w: int) -> void:
 	if state.rain_cover == "umbrella" and Weather.is_rain(state.clock):
 		var u := Sprites.UMBRELLA
-		lcd.blit(u, x + (w - u.w) / 2, y - u.h - 1, false, PLAY_AREA)
+		var ux := x + (w - u.w) / 2
+		var uy := y - u.h - 1
+		lcd.erase_rect(ux, uy, u.w, y - uy)  # зонтик закрывает капли — под ним сухо
+		lcd.blit(u, ux, uy, false, PLAY_AREA)
 
 
 func _draw_birth(lcd: Lcd) -> void:

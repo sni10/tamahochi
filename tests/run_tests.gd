@@ -42,6 +42,7 @@ func _initialize() -> void:
 	test_shop_stubs()
 	test_new_game()
 	test_no_play_in_rain()
+	test_umbrella_shelter()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -1014,4 +1015,29 @@ func test_no_play_in_rain() -> void:
 	g.selected = Game.PLAY
 	g.press_b()
 	check(g.mode == "play" and g.state.happiness == 70, "без дождя играет")
+	Weather.enabled = false
+
+
+# --- зонтик закрывает дождь ---
+
+func test_umbrella_shelter() -> void:
+	Weather.enabled = true
+	var rd := _rain_day(20)
+	var g := Game.new(_pet_at(_at(rd[0], rd[1] + 5 / 60.0)))  # взрослый 28 px: зонтик заходит в зону капель
+	g.state.rain_cover = "umbrella"
+	var ok := true
+	var lk := g.look()
+	var u := Sprites.UMBRELLA
+	for f in 2:
+		var buf := _render(g, f)
+		var x := g.pet_x
+		var y := Game.GROUND - lk.h
+		var ux := x + (lk.w - u.w) / 2
+		var uy := y - u.h - 1
+		for py in range(uy, y):
+			for px in range(maxi(ux, 0), mini(ux + u.w, Lcd.COLS)):
+				var row := py - uy
+				var umbrella_px: bool = row < u.h and u.rows[row][px - ux] == 1
+				ok = ok and (buf[py * Lcd.COLS + px] == 1) == umbrella_px
+	check(ok, "под зонтиком и сквозь купол капель нет — только сам зонтик")
 	Weather.enabled = false

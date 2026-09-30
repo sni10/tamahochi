@@ -51,6 +51,13 @@ func blit(sprite: Sprites.Sprite, x: int, y: int, flip := false, clip := Rect2i(
 						set_px(p.x, p.y)
 
 
+## Погасить прямоугольник (то, что за ним нарисовано раньше, скрыто).
+func erase_rect(x: int, y: int, w: int, h: int) -> void:
+	for dy in h:
+		for dx in w:
+			set_px(x + dx, y + dy, false)
+
+
 ## Погасить пиксели под включёнными пикселями спрайта (маска).
 func erase(sprite: Sprites.Sprite, x: int, y: int) -> void:
 	for sy in sprite.h:
