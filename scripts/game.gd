@@ -404,7 +404,15 @@ func _use_bag_item() -> void:
 		return
 	bag_action = -1
 	if bag_item == UMBRELLA:
-		_set_mode("no")  # зонтик раскрывается сам в начале дождя — вручную нечего применять
+		# Сам зонтик раскрывается в начале дождя; вручную — только если дождь идёт, а зонтик не раскрыт
+		# (дождь начался, когда зонтиков не было).
+		if Weather.is_rain(state.clock) and state.rain_cover != "umbrella" and profile.umbrellas > 0:
+			profile.umbrellas -= 1
+			profile_changed = true
+			state.rain_cover = "umbrella"
+			_set_mode("idle")  # в комнату — видно раскрытый зонтик
+		else:
+			_set_mode("no")
 		return
 	if _is_birth():
 		_set_mode("idle")

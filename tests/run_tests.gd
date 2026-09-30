@@ -43,6 +43,7 @@ func _initialize() -> void:
 	test_new_game()
 	test_no_play_in_rain()
 	test_umbrella_shelter()
+	test_umbrella_manual()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -1040,4 +1041,41 @@ func test_umbrella_shelter() -> void:
 				var umbrella_px: bool = row < u.h and u.rows[row][px - ux] == 1
 				ok = ok and (buf[py * Lcd.COLS + px] == 1) == umbrella_px
 	check(ok, "под зонтиком и сквозь купол капель нет — только сам зонтик")
+	Weather.enabled = false
+
+
+# --- зонтик вручную посреди дождя ---
+
+func test_umbrella_manual() -> void:
+	Weather.enabled = true
+	var rd := _rain_day(30)
+	var in_rain := _at(rd[0], rd[1] + 5 / 60.0)
+	var g := Game.new(_pet_at(in_rain), 1.0, null, 1.0, _umbrellas(0))
+	g.state.rain_cover = "none"  # дождь начался без зонтика
+	g.profile.umbrellas = 1      # купили посреди дождя
+	g.mode = "bag"
+	g.bag_item = Game.UMBRELLA
+	_bag_use(g)
+	check(g.state.rain_cover == "umbrella" and g.profile.umbrellas == 0 and g.profile_changed and g.mode == "idle",
+			"в дождь без защиты USE раскрывает зонтик")
+	g.mode = "bag"
+	g.profile.umbrellas = 1
+	_bag_use(g)
+	check(g.mode == "no" and g.profile.umbrellas == 1, "уже раскрыт — отказ, зонтик не тратится")
+	var dry := Game.new(_pet_at(_at(rd[0], 3)), 1.0, null, 1.0, _umbrellas(1))
+	dry.mode = "bag"
+	dry.bag_item = Game.UMBRELLA
+	_bag_use(dry)
+	check(dry.mode == "no" and dry.profile.umbrellas == 1, "вне дождя USE — отказ")
+	var none := Game.new(_pet_at(in_rain), 1.0, null, 1.0, _umbrellas(0))
+	none.state.rain_cover = "none"
+	none.mode = "bag"
+	none.bag_item = Game.UMBRELLA
+	_bag_use(none)
+	check(none.mode == "no" and none.state.rain_cover == "none", "нет зонтиков — отказ")
+	var s := _pet_at(in_rain)
+	s.rain_cover = "umbrella"
+	var before := s.happiness
+	Decay.apply(s, 10 * 60, [], 1.0, _umbrellas(0))
+	check(is_equal_approx(before - s.happiness, 8.0 / 6), "после ручного раскрытия дождь не отнимает лишнего счастья")
 	Weather.enabled = false
