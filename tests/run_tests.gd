@@ -34,6 +34,7 @@ func _initialize() -> void:
 	test_umbrella()
 	test_umbrella_screens()
 	test_notifications()
+	test_call_rain_growth()
 	test_notify_ask()
 	test_settings_calls()
 	test_about()
@@ -751,6 +752,47 @@ func test_notifications() -> void:
 	Calls.punish_ignored(s, [22, 8], _local(25))
 	check(s.care_mistakes == 0, "зов в тихие часы — штрафа нет")
 	check(PetState.from_dict({"stage": "adult_normal"}).pending_call_at == 0.0, "старый save.json → зова нет")
+
+
+
+func test_call_rain_growth() -> void:
+	check(Calls.text(["rain"], "CAT") == "CAT is out in the rain!", "текст: дождь без зонтика")
+	check(Calls.text(["rain_umbrella"], "CAT") == "It's raining. CAT is under an umbrella", "текст: под зонтиком")
+	check(Calls.text(["born"], "CAT") == "CAT was born!" and Calls.text(["grew"], "CAT") == "CAT has grown!", "тексты: рождение, рост")
+
+	Weather.enabled = true
+	var dry := _rain_day(20, false)
+	var start := _at(dry[0], dry[1])
+	var s := _pet_at(start - HOUR)
+	var c := Calls.next_call(s, [], start - HOUR, _umbrellas(0))
+	check(absf(c.at - start - 60) <= 60 and c.reasons == ["rain"], "дождь без зонтика → зов: %s" % [c])
+	c = Calls.next_call(s, [], start - HOUR, _umbrellas(1))
+	check(absf(c.at - start - 60) <= 60 and c.reasons == ["rain_umbrella"], "дождь с зонтиком → зов: %s" % [c])
+	var n := Calls.plan(s, [], start - HOUR, _umbrellas(0), "CAT")
+	check(n.body == "CAT is out in the rain!" and not n.care, "зов про дождь — не повод ухода")
+	s = _pet_at(start + 60)
+	c = Calls.next_call(s, [], start + 60, _umbrellas(0))
+	check(c.at >= start + 20 * 60, "ушёл посреди дождя — этот дождь не зовёт: %s" % [c])
+
+	# Дождь целиком в тихих часах: к утру кончился — пустого зова нет.
+	var h := floori(dry[1])
+	s = _pet_at(_at(dry[0], h))
+	c = Calls.next_call(s, [h, h + 2], _at(dry[0], h), _umbrellas(0))
+	check(c.reasons.size() > 0 and c.at >= _at(dry[0], h + 2) and c.reasons != ["rain"], "дождь ночью кончился → ищем дальше: %s" % [c])
+	Weather.enabled = false
+
+	var now := _local(12)
+	s = _pet_at(now)
+	s.stage = Evolution.BIRTH
+	c = Calls.next_call(s, [], now)
+	check(absf(c.at - now - Evolution.BIRTH_UNTIL) <= 60 and c.reasons == ["born"], "вылупился → зов: %s" % [c])
+	s = _pet_at(now)
+	s.stage = Evolution.CHILD
+	s.age = Evolution.CHILD_UNTIL - 30
+	c = Calls.next_call(s, [], now)
+	check(c.at == now + 60 and c.reasons == ["grew"], "вырос → зов: %s" % [c])
+	s.satiety = 10
+	check(Calls.plan(s, [], now, null, "CAT").care, "голод — повод ухода")
 
 
 # --- экран разрешения на уведомления ---

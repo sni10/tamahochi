@@ -154,6 +154,9 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
   перезагрузку); экран разрешения на ЖК при первом запуске (Android 13+). Проверено на Xiaomi
   Redmi Note Pro 5G (v0.0.8): пуш пришёл. Не проверено: «вернулся раньше — пуша нет»,
   перезагрузка, запрет уведомлений.
+- ✅ Зов на события (change `call-rain-growth`): начался дождь — «CAT is out in the rain!» или
+  «It's raining. CAT is under an umbrella»; вылупился — «CAT was born!»; вырос — «CAT has grown!».
+  Дождь, при котором игрок ушёл, не зовёт. За проигнорированный зов про дождь или рост штрафа нет.
   Локальная сборка APK: сначала `android_plugin/gradlew assembleRelease assembleDebug` (AAR → `addons/tamahochi_notify/bin`).
 - Если на Xiaomi/Huawei уведомления не приходят — подсказка «разрешите автозапуск» в описание
   в Google Play / FAQ (B.6); в игре ничего не просим.
