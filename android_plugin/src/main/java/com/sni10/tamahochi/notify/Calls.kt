@@ -11,26 +11,27 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * Один зов в системе: момент/заголовок/текст в SharedPreferences (переживают перезагрузку),
- * обычный (неточный) будильник, по нему — уведомление.
+ * Цепочка зовов в SharedPreferences (переживает перезагрузку): JSON [{"at" (unix, с), "title", "body"}, ...]
+ * по возрастанию "at". Обычный (неточный) будильник на ближайший зов; сработал — уведомление и будильник на следующий.
  */
 object Calls {
     private const val PREFS = "tamahochi_notify"
     const val CHANNEL = "calls"
     private const val NOTIFICATION_ID = 1
 
-    fun save(ctx: Context, atMs: Long, title: String, body: String) {
-        prefs(ctx).edit().putLong("at", atMs).putString("title", title).putString("body", body).apply()
+    fun save(ctx: Context, json: String) {
+        prefs(ctx).edit().putString("calls", json).apply()
     }
 
-    /** Поставить будильник на сохранённый зов; прошедший момент сработает сразу. */
+    /** Поставить будильник на ближайший сохранённый зов; прошедший момент сработает сразу. */
     fun arm(ctx: Context) {
-        val at = prefs(ctx).getLong("at", 0)
-        if (at == 0L) return
+        val next = load(ctx).firstOrNull() ?: return
         ctx.getSystemService(AlarmManager::class.java)
-            .setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, alarmIntent(ctx))
+            .setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.getLong("at") * 1000, alarmIntent(ctx))
     }
 
     fun cancel(ctx: Context) {
@@ -39,12 +40,18 @@ object Calls {
         prefs(ctx).edit().clear().apply()
     }
 
+    /** Будильник сработал: показать последний наступивший зов (пропущенные — например, при выключенном
+     *  телефоне — не показываем по одному), убрать наступившие и поставить будильник на следующий. */
+    fun fire(ctx: Context) {
+        val now = System.currentTimeMillis() / 1000 + 1
+        val (due, rest) = load(ctx).partition { it.getLong("at") <= now }
+        save(ctx, JSONArray(rest).toString())
+        arm(ctx)
+        due.lastOrNull()?.let { show(ctx, it.getString("title"), it.getString("body")) }
+    }
+
     @SuppressLint("MissingPermission")  // без разрешения notify() молча не показывает — это и нужно
-    fun show(ctx: Context) {
-        val p = prefs(ctx)
-        val title = p.getString("title", null) ?: return
-        val body = p.getString("body", "") ?: ""
-        p.edit().clear().apply()
+    private fun show(ctx: Context, title: String, body: String) {
         ensureChannel(ctx)
         val manager = NotificationManagerCompat.from(ctx)
         if (!manager.areNotificationsEnabled()) return
@@ -82,15 +89,20 @@ object Calls {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
 
+    private fun load(ctx: Context): List<JSONObject> {
+        val arr = JSONArray(prefs(ctx).getString("calls", null) ?: return emptyList())
+        return List(arr.length()) { arr.getJSONObject(it) }
+    }
+
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
 
-/** Будильник сработал — показать зов. */
+/** Будильник сработал — показать зов и завести следующий. */
 class CallReceiver : BroadcastReceiver() {
-    override fun onReceive(ctx: Context, intent: Intent) = Calls.show(ctx)
+    override fun onReceive(ctx: Context, intent: Intent) = Calls.fire(ctx)
 }
 
-/** После перезагрузки будильники сброшены — поставить сохранённый зов заново. */
+/** После перезагрузки будильники сброшены — поставить ближайший сохранённый зов заново. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) Calls.arm(ctx)

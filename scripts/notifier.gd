@@ -8,14 +8,15 @@ static func _plugin() -> Object:
 	return Engine.get_singleton(PLUGIN) if Engine.has_singleton(PLUGIN) else null
 
 
-## Запланировать уведомление на момент at (unix-время); прежнее отменяется.
-static func schedule(at: float, title: String, body: String) -> void:
+## Запланировать цепочку уведомлений [{"at" (unix-время), "title", "body"}, ...]; прежняя отменяется.
+static func schedule(calls: Array) -> void:
 	var p := _plugin()
 	if p:
-		p.schedule(int(at), title, body)
+		p.schedule(JSON.stringify(calls.map(func(c): return {"at": int(c.at), "title": c.title, "body": c.body})))
 		return
-	var t := Decay.local_time(at)
-	print("notify at %02d:%02d: %s — %s" % [t.hour, t.minute, title, body])
+	for c in calls:
+		var t := Decay.local_time(c.at)
+		print("notify at %02d:%02d: %s — %s" % [t.hour, t.minute, c.title, c.body])
 
 
 ## Нужно ли явно просить разрешение на уведомления (Android 13+, API 33).
