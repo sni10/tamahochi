@@ -185,6 +185,7 @@ func _notification(what: int) -> void:
 ## Игрок уходит: запланировать зов (если есть живой питомец) и сохранить.
 func _leave() -> void:
 	if game.savable() and not game.settings.calls_enabled:  # CALLS OFF: не звать — и не штрафовать
+		print("[calls] CALLS OFF")
 		game.state.pending_call_at = 0.0
 		Notifier.cancel()
 	elif game.savable():

@@ -10,13 +10,12 @@ static func _plugin() -> Object:
 
 ## Запланировать цепочку уведомлений [{"at" (unix-время), "title", "body"}, ...]; прежняя отменяется.
 static func schedule(calls: Array) -> void:
+	for c in calls:  # в logcat — тег godot
+		var t := Decay.local_time(c.at)
+		print("[calls] notify at %02d.%02d %02d:%02d: %s — %s" % [t.day, t.month, t.hour, t.minute, c.title, c.body])
 	var p := _plugin()
 	if p:
 		p.schedule(JSON.stringify(calls.map(func(c): return {"at": int(c.at), "title": c.title, "body": c.body})))
-		return
-	for c in calls:
-		var t := Decay.local_time(c.at)
-		print("notify at %02d:%02d: %s — %s" % [t.hour, t.minute, c.title, c.body])
 
 
 ## Нужно ли явно просить разрешение на уведомления (Android 13+, API 33).
@@ -32,8 +31,7 @@ static func open_settings() -> bool:
 
 
 static func cancel() -> void:
+	print("[calls] cancel")
 	var p := _plugin()
 	if p:
 		p.cancel()
-		return
-	print("notify cancelled")

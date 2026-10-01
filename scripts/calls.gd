@@ -118,3 +118,4 @@ static func punish_ignored(state: PetState, quiet: Array, now: float) -> void:
 	state.pending_call_at = 0.0
 	if at > 0 and now > at + IGNORE_AFTER and not Decay.is_night(at, quiet):
 		state.care_mistakes += 1
+		print("[calls] ignored call → care_mistakes %d" % state.care_mistakes)

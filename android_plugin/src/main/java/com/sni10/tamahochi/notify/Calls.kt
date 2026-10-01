@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import org.json.JSONArray
@@ -22,14 +23,17 @@ object Calls {
     private const val PREFS = "tamahochi_notify"
     const val CHANNEL = "calls"
     private const val NOTIFICATION_ID = 1
+    const val TAG = "TamahochiNotify"  // adb logcat -s TamahochiNotify godot
 
     fun save(ctx: Context, json: String) {
         prefs(ctx).edit().putString("calls", json).apply()
+        Log.i(TAG, "saved ${JSONArray(json).length()} calls")
     }
 
     /** Поставить будильник на ближайший сохранённый зов; прошедший момент сработает сразу. */
     fun arm(ctx: Context) {
-        val next = load(ctx).firstOrNull() ?: return
+        val next = load(ctx).firstOrNull() ?: run { Log.i(TAG, "arm: chain empty"); return }
+        Log.i(TAG, "arm: ${java.util.Date(next.getLong("at") * 1000)} — ${next.getString("body")}")
         ctx.getSystemService(AlarmManager::class.java)
             .setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.getLong("at") * 1000, alarmIntent(ctx))
     }
@@ -38,6 +42,7 @@ object Calls {
         ctx.getSystemService(AlarmManager::class.java).cancel(alarmIntent(ctx))
         NotificationManagerCompat.from(ctx).cancel(NOTIFICATION_ID)
         prefs(ctx).edit().clear().apply()
+        Log.i(TAG, "cancel")
     }
 
     /** Будильник сработал: показать последний наступивший зов (пропущенные — например, при выключенном
@@ -45,6 +50,7 @@ object Calls {
     fun fire(ctx: Context) {
         val now = System.currentTimeMillis() / 1000 + 1
         val (due, rest) = load(ctx).partition { it.getLong("at") <= now }
+        Log.i(TAG, "fire: due ${due.size}, left ${rest.size}")
         save(ctx, JSONArray(rest).toString())
         arm(ctx)
         due.lastOrNull()?.let { show(ctx, it.getString("title"), it.getString("body")) }
@@ -54,7 +60,8 @@ object Calls {
     private fun show(ctx: Context, title: String, body: String) {
         ensureChannel(ctx)
         val manager = NotificationManagerCompat.from(ctx)
-        if (!manager.areNotificationsEnabled()) return
+        if (!manager.areNotificationsEnabled()) run { Log.w(TAG, "show: notifications disabled — $body"); return }
+        Log.i(TAG, "show: $title — $body")
         val open = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
         val notification = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_tamahochi_call)
@@ -105,6 +112,9 @@ class CallReceiver : BroadcastReceiver() {
 /** После перезагрузки будильники сброшены — поставить ближайший сохранённый зов заново. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) Calls.arm(ctx)
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            Log.i(Calls.TAG, "boot")
+            Calls.arm(ctx)
+        }
     }
 }
