@@ -158,6 +158,9 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
   «It's raining. CAT is under an umbrella»; вылупился — «CAT was born!»; вырос — «CAT has grown!».
   Дождь идёт в любое время суток, и ночью тоже (зов про ночной дождь — утром, если он ещё идёт).
   Дождь, при котором игрок ушёл, не зовёт. За проигнорированный зов про дождь или рост штрафа нет.
+- ✅ Цепочка пушей (change `call-chain`): при уходе планируются все зовы на 72 ч — новый пуш на каждый
+  новый повод (born → hungry → sick → dead), плагин после показа сам ставит следующий. Раньше был один пуш:
+  после «CAT was born!» питомец умирал молча.
   Локальная сборка APK: сначала `android_plugin/gradlew assembleRelease assembleDebug` (AAR → `addons/tamahochi_notify/bin`).
 - Если на Xiaomi/Huawei уведомления не приходят — подсказка «разрешите автозапуск» в описание
   в Google Play / FAQ (B.6); в игре ничего не просим.

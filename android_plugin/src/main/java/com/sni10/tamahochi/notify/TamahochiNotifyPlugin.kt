@@ -13,11 +13,11 @@ class TamahochiNotifyPlugin(godot: Godot) : GodotPlugin(godot) {
 
     override fun getPluginName() = "TamahochiNotify"
 
-    /** Запланировать зов на момент [atSec] (unix-время, секунды); прежний заменяется. */
+    /** Запланировать цепочку зовов: JSON [{"at" (unix, с), "title", "body"}, ...]; прежняя заменяется. */
     @UsedByGodot
-    fun schedule(atSec: Long, title: String, body: String) {
+    fun schedule(json: String) {
         val ctx = activity?.applicationContext ?: return
-        Calls.save(ctx, atSec * 1000, title, body)
+        Calls.save(ctx, json)
         Calls.arm(ctx)
     }
 

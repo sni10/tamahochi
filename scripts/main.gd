@@ -188,10 +188,11 @@ func _leave() -> void:
 		game.state.pending_call_at = 0.0
 		Notifier.cancel()
 	elif game.savable():
-		var n := Calls.plan(game.state, game.settings.quiet(), Time.get_unix_time_from_system(), game.profile, game.skin().name)
-		game.state.pending_call_at = n.at if n.get("care") else 0.0  # дождь и рост не штрафуются
-		if n:
-			Notifier.schedule(n.at, n.title, n.body)
+		var calls := Calls.plan(game.state, game.settings.quiet(), Time.get_unix_time_from_system(), game.profile, game.skin().name)
+		var care := calls.filter(func(c): return c.care)  # дождь и рост не штрафуются
+		game.state.pending_call_at = care[0].at if care else 0.0
+		if calls:
+			Notifier.schedule(calls)
 		else:
 			Notifier.cancel()
 	_save()

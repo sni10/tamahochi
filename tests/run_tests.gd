@@ -731,16 +731,16 @@ func test_notifications() -> void:
 	check(Calls.text(["dead"], "CAT") == "CAT has passed away", "текст: смерть")
 
 	var now := _local(12)
-	var n := Calls.plan(_pet_at(now), [], now, null, "CAT")
+	var n: Dictionary = Calls.plan(_pet_at(now), [], now, null, "CAT")[0]
 	check(absf(n.at - now - 5 * HOUR) <= 60 and n.title == "CAT" and n.body == "Time to clean up!", "сытый днём → ~5 ч, кучка: %s" % [n])
 	var s := _pet_at(now)
 	s.satiety = 10
-	n = Calls.plan(s, [], now, null, "CAT")
+	n = Calls.plan(s, [], now, null, "CAT")[0]
 	check(n.at == now + Calls.REMIND_AFTER and n.body == "CAT is hungry!", "повод уже есть → через 15 мин")
 	now = _local(23)
 	s = _pet_at(now)
 	s.digestion = 40  # не спит: кучка к 02:00
-	n = Calls.plan(s, [22, 8], now, null, "CAT")
+	n = Calls.plan(s, [22, 8], now, null, "CAT")[0]
 	check(absf(n.at - _local(32)) <= 60 and n.body.begins_with("Time to clean up!"), "повод ночью → 08:00: %s" % [n])
 	s = _pet_at(now)
 	s.alive = false
@@ -784,7 +784,7 @@ func test_call_rain_growth() -> void:
 	check(absf(c.at - start - 60) <= 60 and c.reasons == ["rain"], "дождь без зонтика → зов: %s" % [c])
 	c = Calls.next_call(s, [], start - HOUR, _umbrellas(1))
 	check(absf(c.at - start - 60) <= 60 and c.reasons == ["rain_umbrella"], "дождь с зонтиком → зов: %s" % [c])
-	var n := Calls.plan(s, [], start - HOUR, _umbrellas(0), "CAT")
+	var n: Dictionary = Calls.plan(s, [], start - HOUR, _umbrellas(0), "CAT")[0]
 	check(n.body == "CAT is out in the rain!" and not n.care, "зов про дождь — не повод ухода")
 	s = _pet_at(start + 60)
 	c = Calls.next_call(s, [], start + 60, _umbrellas(0))
@@ -808,7 +808,32 @@ func test_call_rain_growth() -> void:
 	c = Calls.next_call(s, [], now)
 	check(c.at == now + 60 and c.reasons == ["grew"], "вырос → зов: %s" % [c])
 	s.satiety = 10
-	check(Calls.plan(s, [], now, null, "CAT").care, "голод — повод ухода")
+	check(Calls.plan(s, [], now, null, "CAT")[0].care, "голод — повод ухода")
+
+	# Цепочка: игрок ушёл от корзинки и не вернулся — рождение, нужды, смерть.
+	s = _pet_at(now)
+	s.stage = Evolution.BIRTH
+	var plan := Calls.plan(s, [22, 8], now, null, "CAT")
+	var bodies := plan.map(func(x): return x.body)
+	var rising := range(1, plan.size()).all(func(i): return plan[i].at > plan[i - 1].at)
+	check(plan.size() > 2 and bodies[0] == "CAT was born!" and not plan[0].care and bodies[-1].begins_with("CAT has passed away")
+			and rising, "цепочка: born → … → dead: %s" % [bodies])
+	check(plan.slice(1).all(func(x): return x.care), "после рождения — зовы ухода")
+
+	s = _pet_at(now)
+	s.satiety = 10
+	s.poops = 2
+	c = Calls.chain(s, [], now)[1]
+	check(c.reasons[0] != "hungry" and "hungry" in c.reasons, "известный голод не зовёт заново: %s" % [c])
+	var sick: Array = Calls.chain(s, [], now).filter(func(x): return "sick" in x.reasons)
+	check(Calls.text(sick[0].reasons, "CAT").begins_with("CAT is sick! (+"), "новая болезнь — главный повод: %s" % [sick[0]])
+
+	s = _pet_at(now)
+	s.satiety = 10
+	s.digestion = 99.9
+	plan = Calls.plan(s, [], now, null, "CAT")
+	check(plan[0].at == now + Calls.REMIND_AFTER and plan[0].body == "CAT is hungry! (+1)" and plan[1].at > plan[0].at,
+			"голод сейчас и кучка через минуту — один пуш через 15 мин: %s" % [plan.slice(0, 2)])
 
 
 # --- экран разрешения на уведомления ---
