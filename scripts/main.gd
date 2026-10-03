@@ -8,6 +8,7 @@ const BEZEL := Color("#4a4458")
 const BUTTON := Color("#f5d45c")
 const BUTTON_PRESSED := Color("#d9b53a")
 const AUTOSAVE_SEC := 60.0
+const BUTTON_VIBRATE_MS := 25  # короткий отклик кнопки A/B/C
 
 const DEBUG_PURCHASES := {"1": Shop.AD_REWARD, "g": Shop.AD_REWARD, "п": Shop.AD_REWARD,
 		"2": Shop.SYRINGE_PACK, "3": Shop.PREMIUM, "4": "pet", "5": Shop.AD_UMBRELLA, "6": Shop.AD_PILL}
@@ -100,6 +101,7 @@ func _make_button(key: String, k: float) -> Control:
 		sb.set_border_width_all(roundi(3 * k))
 		sb.border_color = BEZEL
 		b.add_theme_stylebox_override(st, sb)
+	b.button_down.connect(Input.vibrate_handheld.bind(BUTTON_VIBRATE_MS))  # «щелчок» в момент касания
 	b.pressed.connect(_press.bind("press_" + key))  # срабатывает при отпускании
 	col.add_child(b)
 	var label := Label.new()
