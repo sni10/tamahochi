@@ -30,6 +30,9 @@ const ICON_Y := 139
 const ICON_X := 2
 const ICON_STEP := 14
 
+# Касания: зона с запасом — пиксель ЖК на телефоне мельче пальца
+const TAP_SLACK := 2
+
 # Экран выбора
 const NAME_Y := 9
 const DOTS_Y := 25
@@ -91,6 +94,7 @@ var pet_x := (COLS - Sprites.PET_MAX) / 2
 var pet_dir := 1
 var cleaning_poops := 0
 var evolved_from := ""
+var hits: Array = []             # тап-зоны текущего кадра: [Rect2i, Callable]; заполняет render()
 
 
 ## p_state == null — новая игра, начинаем с выбора питомца.
@@ -240,7 +244,7 @@ func press_a() -> void:
 		if bag_action >= 0:
 			bag_action = (bag_action + 1) % ACTION_NAMES.size()
 		else:
-			bag_item = (bag_item + 1) % (BAG_NAMES.size() if tester else BAG_TIME)
+			_bag_step(1)
 		return
 	if mode == "dead" or _busy():
 		return
@@ -354,7 +358,66 @@ func press_c() -> void:
 	selected = -1
 
 
+# --- касания экрана ---
+
+## Касание ЖК в пикселе (x, y): сначала точное попадание в зону, затем — с запасом TAP_SLACK.
+func tap(x: int, y: int) -> void:
+	for slack in [0, TAP_SLACK]:
+		for h in hits:
+			if h[0].grow(slack).has_point(Vector2i(x, y)):
+				h[1].call()
+				return
+
+
+## Мазок по экрану: dir +1 — следующий питомец / предмет сумки, −1 — предыдущий.
+func swipe(dir: int) -> void:
+	if mode == "select":
+		choice = posmod(choice + dir, Sprites.PETS.size())
+	elif mode == "bag":
+		_bag_step(dir)
+
+
+func _hit(rect: Rect2i, action: Callable) -> void:
+	hits.append([rect, action])
+
+
+## Тап по иконке меню: выбрать её и сразу выполнить.
+func _tap_icon(i: int) -> void:
+	if mode == "dead" or _busy():
+		return
+	selected = i
+	press_b()
+
+
+## Тап по полю настроек: выбрать его и выполнить B.
+func _tap_field(i: int) -> void:
+	settings_field = i
+	press_b()
+
+
+## Тап по самому предмету: расходник — сразу USE, остальное — как B.
+func _tap_bag_item() -> void:
+	if bag_item in BUY_PRODUCTS:
+		bag_action = ACTION_USE
+	_use_bag_item()
+
+
+## Тап по запасу расходника: открыть или закрыть подменю USE / BUY / GET.
+func _tap_stock() -> void:
+	bag_action = -1 if bag_action >= 0 else ACTION_USE
+
+
+func _tap_action(i: int) -> void:
+	bag_action = i
+	_use_bag_item()
+
+
 # --- сумка ---
+
+func _bag_step(d: int) -> void:
+	bag_action = -1
+	bag_item = posmod(bag_item + d, BAG_NAMES.size() if tester else BAG_TIME)
+
 
 func _pill_day() -> String:
 	var t := Decay.local_time(state.clock)
@@ -457,6 +520,7 @@ func _use_bag_item() -> void:
 
 func render(lcd: Lcd) -> void:
 	lcd.clear()
+	hits.clear()
 	_dotted(lcd, SEPARATOR_TOP)
 	_dotted(lcd, SEPARATOR_BOTTOM)
 	if mode in ["settings", "bag", "notify_ask", "about", "abandon"]:
@@ -542,6 +606,7 @@ func _draw_menu(lcd: Lcd) -> void:
 	var icons := _icons()
 	for i in icons.size():
 		lcd.blit(icons[i], ICON_X + i * ICON_STEP, ICON_Y)
+		_hit(Rect2i(ICON_X + i * ICON_STEP - 1, ICON_Y - 2, ICON_STEP, Sprites.ICON_SIZE + 4), _tap_icon.bind(i))
 	if selected < 0:
 		return
 	# уголки-скобки вокруг выбранной иконки
@@ -663,6 +728,7 @@ func _draw_dead(lcd: Lcd) -> void:
 	var ghost := Sprites.GHOST
 	var y := _y_for(ghost.h) - 6 + 2 * (frame % 2)
 	lcd.blit(ghost, _center_for(ghost.w), y, false, PLAY_AREA)
+	_hit(PLAY_AREA, press_b)  # тап по комнате — к выбору нового питомца
 
 
 func _draw_heal(lcd: Lcd) -> void:
@@ -696,7 +762,12 @@ func _draw_select(lcd: Lcd) -> void:
 			lcd.set_px(x + 1, DOTS_Y + 1)
 	var lk := look()
 	var pet_y := _y_for(lk.h)
-	lcd.blit(lk.idle[frame % 2], _center_for(lk.w), pet_y)
+	var x := _center_for(lk.w)
+	lcd.blit(lk.idle[frame % 2], x, pet_y)
+	# Комната делится на три зоны: слева — предыдущий, питомец — выбрать, справа — следующий.
+	_hit(Rect2i(0, PLAY_Y, x, GROUND - PLAY_Y), press_a)
+	_hit(Rect2i(x, PLAY_Y, lk.w, GROUND - PLAY_Y), press_b)
+	_hit(Rect2i(x + lk.w, PLAY_Y, COLS - x - lk.w, GROUND - PLAY_Y), press_c)
 	var unlocked := Shop.is_unlocked(profile, sk)
 	if not unlocked:
 		var lock := Sprites.LOCK
@@ -709,10 +780,13 @@ func _draw_select(lcd: Lcd) -> void:
 	var hint_y := ICON_Y + 3
 	draw_text(lcd, "A", hint_y, ICON_X + 2)
 	lcd.blit(Sprites.ARROW_LEFT, ICON_X + 8, hint_y)
+	_hit(Rect2i(ICON_X, hint_y - 2, 14, 9), press_a)
 	if unlocked:
 		draw_text(lcd, "B", hint_y)
+		_hit(Rect2i((COLS - 8) / 2, hint_y - 2, 8, 9), press_b)
 	lcd.blit(Sprites.ARROW_RIGHT, COLS - ICON_X - 12, hint_y)
 	draw_text(lcd, "C", hint_y, COLS - ICON_X - 6)
+	_hit(Rect2i(COLS - ICON_X - 14, hint_y - 2, 14, 9), press_c)
 
 
 static func text_width(text: String, scale: int) -> int:
@@ -734,6 +808,19 @@ func draw_text(lcd: Lcd, text: String, y: int, x := -1, scale := 1) -> void:
 		x += ((g.w if g else 3) + 1) * scale
 
 
+## Строка подсказок по центру, части через два пробела («A NEXT  B OK»);
+## каждая часть [текст, действие] — тап-зона своей кнопки, действие null — просто надпись.
+func _hints(lcd: Lcd, y: int, parts: Array) -> void:
+	var texts := parts.map(func(p): return p[0])
+	var x := (COLS - text_width("  ".join(texts), 1)) / 2
+	for p in parts:
+		var w := text_width(p[0], 1)
+		draw_text(lcd, p[0], y, x)
+		if p[1]:
+			_hit(Rect2i(x - 1, y - 1, w + 2, 7), p[1])
+		x += w + text_width("  ", 1) + 2
+
+
 # --- экран настроек ---
 
 func _draw_settings(lcd: Lcd) -> void:
@@ -747,16 +834,18 @@ func _draw_settings(lcd: Lcd) -> void:
 			lcd.blit(Sprites.ARROW_RIGHT, 2, y + 3)
 		draw_text(lcd, rows[i][0], y + 3, 8)
 		draw_text(lcd, "%02d:00" % rows[i][1], y, 30, 2)
+		_hit(Rect2i(0, y - 1, COLS, 12), _tap_field.bind(i))
 	var lines := [[FIELD_CALLS, "CALLS ON" if st.calls_enabled else "CALLS OFF", 94], [FIELD_SOUND, "SOUND", 104]]
 	for line in lines:
 		if line[0] == settings_field:
 			lcd.blit(Sprites.ARROW_RIGHT, 2, line[2])
 		draw_text(lcd, line[1], line[2], 8)
+		_hit(Rect2i(0, line[2] - 1, COLS, 8), _tap_field.bind(line[0]))
 	var now := Decay.local_time(state.clock)
 	draw_text(lcd, settings_note if settings_note else "NOW %02d:%02d" % [now.hour, now.minute], 120)
 	var action: String = ["+1", "+1", "SET", "OPEN"][settings_field]
-	draw_text(lcd, "A NEXT  B " + action, ICON_Y)
-	draw_text(lcd, "C BACK", ICON_Y + 9)
+	_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B " + action, press_b]])
+	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
 
 
 # --- экран разрешения на уведомления ---
@@ -766,7 +855,8 @@ func _draw_notify_ask(lcd: Lcd) -> void:
 	var lines := ["I WILL CALL YOU", "WHEN I NEED YOU", "", "PLEASE ALLOW", "NOTIFICATIONS"]
 	for i in lines.size():
 		draw_text(lcd, lines[i], 50 + i * 10)
-	draw_text(lcd, "B OK", ICON_Y + 3)
+	_hints(lcd, ICON_Y + 3, [["B OK", press_b]])
+	_hit(Rect2i(0, 0, COLS, ROWS), press_b)  # тап в любом месте — OK
 
 
 # --- экран About ---
@@ -792,8 +882,8 @@ func _draw_about(lcd: Lcd) -> void:
 	var lines := ["TAMAHOCHI", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
 	for i in lines.size():
 		draw_text(lcd, lines[i], 48 + i * 11)
-	draw_text(lcd, "B FEEDBACK", ICON_Y)
-	draw_text(lcd, "C BACK", ICON_Y + 9)
+	_hints(lcd, ICON_Y, [["B FEEDBACK", press_b]])
+	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
 
 
 # --- экран «новая игра» ---
@@ -804,25 +894,30 @@ func _draw_abandon(lcd: Lcd) -> void:
 	draw_text(lcd, "YOUR PET", 53)
 	var sad: Sprites.Sprite = look().sad[frame % 2]
 	lcd.blit(sad, _center_for(sad.w), 112 - sad.h)
-	draw_text(lcd, "B CONFIRM", ICON_Y)
-	draw_text(lcd, "C BACK", ICON_Y + 9)
+	_hints(lcd, ICON_Y, [["B CONFIRM", press_b]])
+	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
 
 
 # --- экран сумки ---
 
 func _draw_bag(lcd: Lcd) -> void:
 	var icon: Sprites.Sprite = _bag_icons()[bag_item]
+	var icon_x := (COLS - icon.w * 2) / 2
 	draw_text(lcd, "BAG", 15)
-	lcd.blit(icon, (COLS - icon.w * 2) / 2, 50, false, Rect2i(0, 0, COLS, ROWS), 2)
+	lcd.blit(icon, icon_x, 50, false, Rect2i(0, 0, COLS, ROWS), 2)
 	lcd.blit(Sprites.ARROW_LEFT, 8, 58)
 	lcd.blit(Sprites.ARROW_RIGHT, COLS - 8 - Sprites.ARROW_RIGHT.w, 58)
 	draw_text(lcd, BAG_NAMES[bag_item], 84)
+	# Слева и справа от предмета — листать, сам предмет (с названием) — применить / открыть.
+	_hit(Rect2i(0, 44, icon_x, 46), _bag_step.bind(-1))
+	_hit(Rect2i(icon_x, 46, icon.w * 2, 44), _tap_bag_item)
+	_hit(Rect2i(icon_x + icon.w * 2, 44, COLS - icon_x - icon.w * 2, 46), _bag_step.bind(1))
 	if bag_item == BAG_PREMIUM:
 		var lines := ["ALL PETS", "%d PILLS" % Shop.PREMIUM_PILLS, "%d SYRINGES" % Shop.PREMIUM_SYRINGES, "%d UMBRELLAS" % Shop.PREMIUM_UMBRELLAS]
 		for i in lines.size():
 			draw_text(lcd, lines[i], 95 + i * 8)
-		draw_text(lcd, "OWNED" if profile.premium else "A NEXT  B BUY", ICON_Y)
-		draw_text(lcd, "C BACK", ICON_Y + 9)
+		_hints(lcd, ICON_Y, [["OWNED", null]] if profile.premium else [["A NEXT", press_a], ["B BUY", press_b]])
+		_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
 		return
 	if bag_item == PILL:
 		draw_text(lcd, "FREE %d/%d  X%d" % [pills_left(), FREE_PILLS_PER_DAY, profile.pills], 96)
@@ -833,17 +928,19 @@ func _draw_bag(lcd: Lcd) -> void:
 	elif bag_item == BAG_TIME:
 		draw_text(lcd, "SPEED X%d" % speed, 96)
 	if bag_item in BUY_PRODUCTS:
+		_hit(Rect2i(0, 94, COLS, 9), _tap_stock)  # запас — открыть / закрыть подменю
 		if bag_action >= 0:  # подменю: USE / BUY Xn / GET X1 (реклама)
 			var labels := ["USE", "BUY X%d" % PACK_SIZES[bag_item], "GET X1 AD"]
 			for i in labels.size():
 				if i == bag_action:
 					lcd.blit(Sprites.ARROW_RIGHT, 14, 107 + i * 8)
 				draw_text(lcd, labels[i], 107 + i * 8, 20)
-			draw_text(lcd, "A NEXT  B OK", ICON_Y)
+				_hit(Rect2i(0, 106 + i * 8, COLS, 8), _tap_action.bind(i))
+			_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B OK", press_b]])
 		else:
-			draw_text(lcd, "A NEXT  B MENU", ICON_Y)
-		draw_text(lcd, "C BACK", ICON_Y + 9)
+			_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B MENU", press_b]])
+		_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
 		return
 	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT, BAG_NEW] else "SET"
-	draw_text(lcd, "A NEXT  B %s" % action, ICON_Y)
-	draw_text(lcd, "C BACK", ICON_Y + 9)
+	_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B " + action, press_b]])
+	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])

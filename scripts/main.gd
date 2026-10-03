@@ -1,5 +1,5 @@
 extends Control
-## Корпус: экран, три кнопки, клавиатура, игровой цикл и автосохранение (≙ app.py + main.py).
+## Корпус: экран, три кнопки, касания ЖК, клавиатура, игровой цикл и автосохранение (≙ app.py + main.py).
 ## Отладка: godot --path . -- --speed 60 | --grow 3600;
 ## «покупки» (только debug): 1/G/П — ролик = шприц, 2 — пачка, 3 — Premium, 4 — показанный питомец, 5 — ролик = зонтик, 6 — ролик = таблетка.
 
@@ -77,6 +77,8 @@ func _build_ui() -> void:
 	add_child(box)
 	lcd = Lcd.new()
 	lcd.size_flags_vertical = SIZE_EXPAND_FILL
+	lcd.tapped.connect(func(cell: Vector2i): game.tap(cell.x, cell.y); _press(""))
+	lcd.swiped.connect(func(dir: int): game.swipe(dir); _press(""))
 	box.add_child(lcd)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
