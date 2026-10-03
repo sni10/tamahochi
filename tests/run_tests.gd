@@ -45,6 +45,7 @@ func _initialize() -> void:
 	test_no_play_in_rain()
 	test_umbrella_shelter()
 	test_umbrella_manual()
+	test_touch()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -1162,3 +1163,110 @@ func test_umbrella_manual() -> void:
 	Decay.apply(s, 10 * 60, [], 1.0, _umbrellas(0))
 	check(is_equal_approx(before - s.happiness, 8.0 / 6), "после ручного раскрытия дождь не отнимает лишнего счастья")
 	Weather.enabled = false
+
+
+# --- касания экрана ---
+
+## Отрисовать кадр (он заполняет тап-зоны) и коснуться пикселя (x, y).
+func _tap(g: Game, lcd: Lcd, x: int, y: int) -> void:
+	g.render(lcd)
+	g.tap(x, y)
+
+
+func test_touch() -> void:
+	var lcd := Lcd.new()
+	var icon_y := Game.ICON_Y + 6
+	var g := Game.new(_adult())
+	g.state.satiety = 50
+	_tap(g, lcd, Game.ICON_X + Game.FEED * Game.ICON_STEP + 6, icon_y)
+	check(g.selected == Game.FEED and g.mode == "eat" and g.state.satiety == 65, "тап по еде — выбрать и покормить")
+	_tap(g, lcd, Game.ICON_X + Game.SLEEP * Game.ICON_STEP + 6, icon_y)
+	check(g.selected == Game.FEED and not g.state.sleeping, "во время анимации тап по меню игнорируется")
+	g.mode = "idle"
+	_tap(g, lcd, Game.ICON_X + Game.BAG * Game.ICON_STEP + 6, icon_y)
+	check(g.mode == "bag" and g.selected == Game.BAG, "тап по сумке открывает сумку")
+	_tap(g, lcd, 36, 20)
+	check(g.mode == "bag", "тап мимо зон ничего не делает")
+
+	# Сумка: стрелки листают, предмет — применить, запас — подменю.
+	g.bag_item = Game.PILL
+	_tap(g, lcd, 9, 60)
+	check(g.bag_item == Game.BAG_PREMIUM, "левая стрелка — предыдущий предмет (по кругу, без TIME)")
+	_tap(g, lcd, 63, 60)
+	_tap(g, lcd, 63, 60)
+	check(g.bag_item == Game.SYRINGE, "правая стрелка — следующий предмет")
+	g.state.sick = true
+	g.state.fever = 30
+	g.profile.syringes = 1
+	_tap(g, lcd, 36, 62)
+	check(g.mode == "heal" and not g.state.sick and g.profile.syringes == 0, "тап по шприцу — применить")
+	g.mode = "bag"
+	g.tester = true
+	_tap(g, lcd, 36, 98)
+	check(g.bag_action == Game.ACTION_USE, "тап по запасу — подменю USE / BUY / GET")
+	_tap(g, lcd, 36, 118)
+	check(g.profile.syringes == 5 and g.bag_action == Game.ACTION_BUY and g.mode == "bag", "тап по BUY — купить набор")
+	_tap(g, lcd, 36, 126)
+	check(g.profile.syringes == 6, "тап по GET — +1 за рекламу")
+	_tap(g, lcd, 36, 98)
+	check(g.bag_action == -1, "повторный тап по запасу закрывает подменю")
+	g.swipe(1)
+	check(g.bag_item == Game.UMBRELLA, "мазок — следующий предмет")
+	g.swipe(-1)
+	g.swipe(-1)
+	check(g.bag_item == Game.PILL, "мазок обратно — предыдущий")
+	_tap(g, lcd, 36, Game.ICON_Y + 11)
+	check(g.mode == "idle", "тап по C BACK — в комнату")
+
+	# Подсказки кнопок нажимаются: A NEXT / B OPEN.
+	g.mode = "bag"
+	g.bag_item = Game.BAG_SETTINGS
+	g.render(lcd)
+	var a_next := g.hits.filter(func(h): return h[1] == g.press_a)
+	check(a_next.size() == 1, "подсказка A NEXT — тап-зона")
+	_tap(g, lcd, 36 + 12, Game.ICON_Y + 2)
+	check(g.mode == "settings", "тап по B OPEN — настройки")
+	_tap(g, lcd, 36, 75)
+	check(g.settings_field == Game.FIELD_TO and g.settings.quiet_end == (Storage.Settings.new().quiet_end + 1) % 24,
+			"тап по строке TO — выбрать и +1")
+	_tap(g, lcd, 36, 95)
+	check(g.settings_field == Game.FIELD_CALLS and not g.settings.calls_enabled, "тап по CALLS — переключить")
+
+	# Выбор питомца: стороны листают, питомец — выбрать.
+	var sel := Game.new(null)
+	_tap(sel, lcd, 3, 100)
+	check(sel.choice == Sprites.PETS.size() - 1, "тап слева — предыдущий питомец")
+	_tap(sel, lcd, 69, 100)
+	_tap(sel, lcd, 36, 100)
+	check(sel.mode == "idle" and sel.state.species == "blob", "тап по питомцу — выбрать")
+	sel.state.alive = false
+	sel.mode = "dead"
+	_tap(sel, lcd, 36, 80)
+	check(sel.mode == "select", "тап по комнате после смерти — к выбору")
+	sel.swipe(1)
+	check(sel.choice == 1, "мазок на выборе — следующий питомец")
+	lcd.free()
+
+	# Касание в координатах контрола → пиксель ЖК (пиксель 5 при размере 380×800, отступ по центру).
+	var screen := Lcd.new()
+	screen.size = Vector2(380, 800)
+	check(screen.cell_at(Vector2(10, 10)) == Vector2i(0, 0), "левый верхний пиксель: %s" % screen.cell_at(Vector2(10, 10)))
+	check(screen.cell_at(Vector2(10 + 5 * 71 + 2, 10 + 5 * 155 + 2)) == Vector2i(71, 155), "правый нижний пиксель")
+	var got := []
+	screen.tapped.connect(func(c): got.append(c))
+	screen.swiped.connect(func(d): got.append(d))
+	_touch(screen, Vector2(100, 300), Vector2(103, 302))
+	check(got == [Vector2i(18, 58)], "короткое касание — тап: %s" % [got])
+	got.clear()
+	_touch(screen, Vector2(300, 300), Vector2(225, 310))
+	check(got == [1], "мазок влево на 15 пикселей — следующий: %s" % [got])
+	screen.free()
+
+
+func _touch(lcd: Lcd, from: Vector2, to: Vector2) -> void:
+	for p in [[from, true], [to, false]]:
+		var e := InputEventMouseButton.new()
+		e.button_index = MOUSE_BUTTON_LEFT
+		e.position = p[0]
+		e.pressed = p[1]
+		lcd._gui_input(e)

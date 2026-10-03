@@ -1,5 +1,9 @@
 class_name Lcd extends Control
 ## Монохромный ЖК-дисплей с крупными пикселями: рисование в буфер, показ — по flush().
+## Касания экрана переводятся в координаты ЖК-пикселей: короткое — tapped, горизонтальный мазок — swiped.
+
+signal tapped(cell: Vector2i)
+signal swiped(dir: int)  ## +1 — палец ушёл влево (следующий), −1 — вправо (предыдущий)
 
 const COLS := 72
 const ROWS := 156
@@ -9,8 +13,10 @@ const BG := Color("#9ead86")         # подложка
 const PIXEL_OFF := Color("#94a37d")  # «призрак» выключенного пикселя
 const PIXEL_ON := Color("#1f2a1f")
 const SHADOW := Color("#7f8e6c")     # тень от включённого пикселя на подложке
+const SWIPE_CELLS := 10  # мазок короче — это тап
 
 var buf := PackedByteArray()
+var _press_at := Vector2.ZERO
 
 
 func _init() -> void:
@@ -70,14 +76,43 @@ func flush() -> void:
 	queue_redraw()
 
 
+## Целый размер пикселя: экран вписан в контрол вместе с рамкой в 2 пикселя по краям.
+func _pixel() -> int:
+	return maxi(1, floori(minf(size.x / (COLS + 4), size.y / (ROWS + 4))))
+
+
+func _origin(pixel: int) -> Vector2:
+	return ((size - Vector2(COLS, ROWS) * pixel) / 2).floor()
+
+
+## ЖК-пиксель под точкой контрола (может быть за пределами сетки).
+func cell_at(pos: Vector2) -> Vector2i:
+	var pixel := _pixel()
+	return Vector2i(((pos - _origin(pixel)) / pixel).floor())
+
+
+## Тач приходит сюда эмулированной мышью (emulate_mouse_from_touch), мышь на ПК — как есть.
+func _gui_input(event: InputEvent) -> void:
+	var e := event as InputEventMouseButton
+	if not e or e.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if e.pressed:
+		_press_at = e.position
+		return
+	var d := (e.position - _press_at) / _pixel()
+	if absf(d.x) >= SWIPE_CELLS and absf(d.x) > absf(d.y):
+		swiped.emit(-1 if d.x > 0 else 1)
+	else:
+		tapped.emit(cell_at(_press_at))
+
+
 func _draw() -> void:
-	# Целый размер пикселя: экран вписан в контрол вместе с рамкой в 2 пикселя по краям.
-	var pixel := maxi(1, floori(minf(size.x / (COLS + 4), size.y / (ROWS + 4))))
+	var pixel := _pixel()
 	var gap := 1 if pixel >= 3 else 0
 	var dot := pixel - gap
 	var shade := maxi(1, pixel / 5)
 	var grid := Vector2(COLS, ROWS) * pixel
-	var origin := ((size - grid) / 2).floor()
+	var origin := _origin(pixel)
 	draw_rect(Rect2(origin - Vector2.ONE * pixel * 2, grid + Vector2.ONE * pixel * 4), BEZEL)
 	draw_rect(Rect2(origin - Vector2.ONE * pixel, grid + Vector2.ONE * pixel * 2), BG)
 	for y in ROWS:
