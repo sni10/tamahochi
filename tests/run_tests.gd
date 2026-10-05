@@ -46,6 +46,7 @@ func _initialize() -> void:
 	test_umbrella_shelter()
 	test_umbrella_manual()
 	test_touch()
+	test_clean_wave()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -1270,3 +1271,42 @@ func _touch(lcd: Lcd, from: Vector2, to: Vector2) -> void:
 		e.position = p[0]
 		e.pressed = p[1]
 		lcd._gui_input(e)
+
+
+# --- уборка: волна сверху вниз ---
+
+func test_clean_wave() -> void:
+	var s := _adult()
+	s.poops = 1
+	var g := Game.new(s)
+	g.selected = Game.CLEAN
+	g.press_b()
+	var lcd := Lcd.new()
+	var bare := Lcd.new()
+	var fronts := []
+	var poop_seen := []  # кадр с кучкой отличается от того же кадра без неё
+	for t in Game.ANIM_LENGTH["clean"]:
+		g.mode_ticks = t
+		g.cleaning_poops = 0
+		g.render(bare)
+		g.cleaning_poops = 1
+		g.render(lcd)
+		fronts.append(g._wave_front())
+		poop_seen.append(lcd.buf != bare.buf)
+	var down := true
+	for i in range(1, fronts.size()):
+		down = down and fronts[i] > fronts[i - 1]
+	check(down and fronts[0] > Game.PLAY_Y and fronts[-1] == Game.GROUND, "волна спускается от верха комнаты до пола: %s" % [fronts])
+	check(poop_seen[0] and not poop_seen[-1], "кучка видна в начале и смыта к концу: %s" % [poop_seen])
+	g.mode_ticks = 2
+	g.render(lcd)
+	var top := g._wave_front() - Sprites.WAVE.h  # в каждом столбце есть пиксель волны
+	var solid := true
+	for x in Lcd.COLS:
+		var hit := false
+		for y in range(top, top + Sprites.WAVE.h):
+			hit = hit or lcd.get_px(x, y)
+		solid = solid and hit
+	check(solid, "волна на всю ширину комнаты")
+	lcd.free()
+	bare.free()
