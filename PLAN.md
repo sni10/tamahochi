@@ -1,11 +1,11 @@
-# Tamahochi — план развития
+# Pixel Pet — план развития
 
 Виртуальный пиксельный питомец: живёт в реальном времени — и когда приложение закрыто;
 в PLAY — свои мини-игры.
 
 > **2026-10-05: юристы** — приложение слишком похоже на торговые элементы Tamagotchi (Bandai Namco).
-> Питомца оставляем, но уходим от сходства (B.10) и добавляем мини-игры (B.11). Имя «Tamahochi» —
-> рабочее, меняется до первой загрузки в Play (B.6). Слово «тамагочи» в текстах и спеках не используем.
+> Питомца оставляем, но уходим от сходства (B.10) и добавляем мини-игры (B.11). Имя «Tamahochi» сменено
+> на **Pixel Pet** (пакет `com.sni10.pixelpet`). Слово «тамагочи» в текстах и спеках не используем.
 
 Цель: довести геймплей на Python-прототипе, перенести на Android и выпустить в Google Play.
 
@@ -123,8 +123,8 @@ BIRTH ──► BABY ──► CHILD ──► ADULT (GOOD / NORMAL / BAD)
 
 Godot-проект — корень репозитория (Godot 4.7), change `openspec/changes/archive/*-port-to-godot`.
 Тесты: `godot --headless --path . -s res://tests/run_tests.gd`. Запуск с ускорением: `godot --path . -- --speed 60`.
-APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-android-build-template --export-debug "Android" build/tamahochi-debug.apk`
-(флаг шаблона нужен только при первой сборке или после удаления `android/`); установка `adb install -r build/tamahochi-debug.apk`.
+APK (пакет `com.sni10.pixelpet`): `godot --headless --path . --install-android-build-template --export-debug "Android" build/pixelpet-debug.apk`
+(флаг шаблона нужен только при первой сборке или после удаления `android/`); установка `adb install -r build/pixelpet-debug.apk`.
 Окружение: JDK 17, Android SDK, шаблоны экспорта Godot 4.7.2 — пути в `%APPDATA%\Godot\editor_settings-4.7.tres`.
 
 1. Загрузчик спрайтов `assets/*.txt` — файлы переносятся как есть.
@@ -138,7 +138,7 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
 
 - `.github/workflows/release.yml`: на каждый PR и push в `main` — автотесты (`tests/run_tests.gd`);
   на push в `main` (merge) при зелёных тестах — GitHub Release: тег = последний `vX.Y.Z` с Z+1,
-  APK `tamahochi-vX.Y.Z.apk` (versionCode = номер прогона CI), исходники GitHub прикладывает сам.
+  APK `pixelpet-vX.Y.Z.apk` (versionCode = номер прогона CI), исходники GitHub прикладывает сам.
 - APK подписан release-ключом: локально `%USERPROFILE%\.tamahochi\release.keystore` (пароль —
   `release.keystore.txt` рядом), в GitHub — секреты `ANDROID_KEYSTORE_BASE64/ALIAS/PASSWORD`.
 - **Ключ терять нельзя**: без него новые версии не встанут поверх старых (и в Google Play тоже).
@@ -154,7 +154,7 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
   через 15 мин), текст — `Calls.text`, штраф за проигнорированный зов — `Calls.punish_ignored`,
   доставка — `scripts/notifier.gd` (на ПК — строка в лог).
 - ✅ Доставка на Android (change `android-notify-plugin`): Kotlin-плагин `android_plugin/` → синглтон
-  `TamahochiNotify` (неточный будильник, баннер со звуком, нажатие открывает игру, переживает
+  `PetNotify` (неточный будильник, баннер со звуком, нажатие открывает игру, переживает
   перезагрузку); экран разрешения на ЖК при первом запуске (Android 13+). Проверено на Xiaomi
   Redmi Note Pro 5G (v0.0.8): пуш пришёл. Не проверено: «вернулся раньше — пуша нет»,
   перезагрузка, запрет уведомлений.
@@ -165,7 +165,7 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
 - ✅ Цепочка пушей (change `call-chain`): при уходе планируются все зовы на 72 ч — новый пуш на каждый
   новый повод (born → hungry → sick → dead), плагин после показа сам ставит следующий. Раньше был один пуш:
   после «CAT was born!» питомец умирал молча.
-  Локальная сборка APK: сначала `android_plugin/gradlew assembleRelease assembleDebug` (AAR → `addons/tamahochi_notify/bin`).
+  Локальная сборка APK: сначала `android_plugin/gradlew assembleRelease assembleDebug` (AAR → `addons/pet_notify/bin`).
 - Если на Xiaomi/Huawei уведомления не приходят — подсказка «разрешите автозапуск» в описание
   в Google Play / FAQ (B.6); в игре ничего не просим.
 
@@ -194,9 +194,9 @@ APK (пакет `com.sni10.tamahochi`): `godot --headless --path . --install-and
 
 ## B.3a About и отзыв — ✅ (change `about-feedback`)
 
-Сумка → ABOUT: «TAMAHOCHI», версия (CI пишет её в `application/config/version`), «MADE BY SNI10 /
+Сумка → ABOUT: «PIXEL PET», версия (CI пишет её в `application/config/version`), «MADE BY SNI10 /
 WITH LOVE / TO PETS». B FEEDBACK — почтовое приложение с письмом на d.strelets.a@gmail.com:
-тема «Tamahochi feedback», в теле версия, модель телефона, ОС — для отзывов тестировщиков (B.6).
+тема «Pixel Pet feedback», в теле версия, модель телефона, ОС — для отзывов тестировщиков (B.6).
 
 ## B.3b Тестовые сборки: TIME — ✅ (change `tester-time`)
 
@@ -271,10 +271,11 @@ WITH LOVE / TO PETS». B FEEDBACK — почтовое приложение с �
 
 - [ ] Аккаунт разработчика Google Play ($25 разово). Один аккаунт — запасные не заводить
       (при блокировке связанные аккаунты закрывают вместе).
-- [ ] **Новое имя игры — до первой загрузки в Play**: «Tamahochi» созвучно «Tamagotchi» (товарный знак
-      Bandai Namco) → жалоба правообладателя, удаление, возвраты за год. Сменить `config/name`,
-      пакет `com.sni10.tamahochi` (после первой загрузки пакет не меняется), тексты в игре и уведомлениях.
-      В описании — «virtual pet», не «Tamagotchi».
+- [x] **Новое имя — Pixel Pet** (было «Tamahochi», созвучно «Tamagotchi»): `config/name`, пакет
+      `com.sni10.pixelpet` (после первой загрузки не меняется), плагин `PetNotify`, ABOUT, тема письма, APK в CI.
+      В описании — «virtual pet», не «Tamagotchi», без «LCD» и «монохромный».
+- [x] Версия: файл `VERSION` (`major.minor`) — CI начинает с `.0`, когда его подняли; ребрендинг — **0.1.0**.
+- [ ] Название в Play: «Pixel Pet: …» с подзаголовком — в Play уже есть «Pixel Pet: Virtual Friend».
 - [ ] **Два пресета экспорта**: `Android (tester)` — с меткой `tester` для закрытого теста, `Android` —
       без неё для публикации (иначе игроки получат TIME, B.3b). В CI — проверка, что в публикуемом APK/AAB
       нет `tester`.
@@ -291,7 +292,8 @@ WITH LOVE / TO PETS». B FEEDBACK — почтовое приложение с �
 - [ ] Лицензии: текст лицензии Godot (MIT) — на странице ABOUT или отдельной странице лицензий.
 - [ ] Ключ подписи: включить Play App Signing; upload-keystore хранить в нескольких местах
       (без него обновление не выпустить).
-- [ ] Иконка, скриншоты, описание (EN, по желанию UA).
+- [x] Иконка: довольный BLOB на небе и траве (`tools/make_icon.gd` → `assets/icon/`: 512 для Play, 192 и адаптивная).
+- [ ] Скриншоты, описание (EN, по желанию UA).
 
 ---
 
@@ -354,9 +356,13 @@ WITH LOVE / TO PETS». B FEEDBACK — почтовое приложение с �
 
 - [ ] **Имя и пакет** (см. B.6): `config/name`, `com.sni10.<имя>`, аддон и Kotlin-пакет уведомлений,
       CI, тексты уведомлений. Кандидатов проверить в Play и в базах товарных знаков (USPTO, EUIPO, WIPO).
-- [ ] **Цветная палитра вместо ЖК**: без подложки `#9ead86`, без «призраков» и теней. Спрайты остаются
-      1-битными, цвет — по слою: небо, пол, питомец (свой цвет у каждого вида), предметы, интерфейс.
-      Меняется только `lcd.gd` + спек `lcd-display`; логика не трогается.
+- [x] **Цветная палитра вместо ЖК** (своя, `scripts/palette.gd`): без подложки, «призраков» и теней.
+      В спрайтах `#` — «перо» (цвет задаёт рисующий), буквы — цвета палитры. Два слоя экрана: фон (небо,
+      земля, декор) и передний план. Питомец: `color` — контур, `fill` — заливка тела (внутренность контура
+      находится сама). Шкалы цветные. Небо: день / ночь / дождь. Скриншоты: `tools/snapshot.gd` → `build/shots`.
+- [x] **Сцены** (`assets/scenes/*.txt`, бесплатная косметика, привязаны к виду через `scene:` в `pet.txt`):
+      декор у краёв комнаты на фоне, земля, `[fall]` — что падает у краёв (снег во льдах).
+      MEADOW, FOREST, PARK, BEACH, ICE. Дальше — SAVANNA, RIVER под новых зверей.
 - [ ] **Без триады A/B/C**: управление — касаниями (B.9 уже есть). Отдельные кнопки под экраном
       убрать или заменить чем-то своим (например, «назад» жестом/значком на экране).
 - [ ] **Появление без яйца**: птицы прилетают на парашюте, махая крылышками, — медленно спускаются
@@ -364,6 +370,22 @@ WITH LOVE / TO PETS». B FEEDBACK — почтовое приложение с �
       `birth: parachute` вместо `egg`, спрайты `egg`/`egg_crack` удалить.
 - [ ] Пройтись по остальным «фирменным» деталям: череп над больным, шприц, привидение после смерти —
       по возможности заменить своими образами.
+
+## B.12 Новые питомцы
+
+Рисуем в цвете сразу (контур + заливка), у каждого — своя сцена.
+
+- [ ] LION — саванна (SAVANNA)
+- [ ] ELEPHANT (слонёнок) — саванна
+- [ ] HIPPO — река (RIVER)
+- [ ] PENGUIN — льды (ICE): по бокам вместо деревьев падают снежинки
+- [ ] HEDGEHOG — лес
+- [ ] DEER (косуля / олень с рожками) — лес
+- [ ] WALRUS — льды
+- [ ] **Масти**: у вида несколько окрасов. Перекраска — список пар `color/fill` в `pet.txt`
+      (`coats: o/h, d/i, k/e`), без новых рисунков; узоры (пятна, полоски) — отдельный слой поверх кадров.
+      Масть — поле в состоянии питомца (старые сохранения — масть по умолчанию). Как получать — решить:
+      выбор на экране выбора, случайно при рождении или редкие как косметика/награда.
 
 ## B.11 Мини-игры в PLAY
 

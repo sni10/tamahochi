@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace 'com.sni10.tamahochi.notify'
+    namespace 'com.sni10.pixelpet.notify'
     compileSdk 36
     defaultConfig {
         minSdk 24
@@ -22,14 +22,14 @@ android {
 
 dependencies {
     compileOnly 'org.godotengine:godot:4.7.2.stable'
-    implementation 'androidx.core:core:1.13.1'  // та же версия — в addons/tamahochi_notify/plugin.gd
+    implementation 'androidx.core:core:1.13.1'  // та же версия — в addons/pet_notify/plugin.gd
 }
 
-// Готовые AAR — в аддон Godot, откуда их берёт экспорт (addons/tamahochi_notify/bin, не в git).
+// Готовые AAR — в аддон Godot, откуда их берёт экспорт (addons/pet_notify/bin, не в git).
 tasks.register('copyAarToAddon', Copy) {
     from layout.buildDirectory.dir('outputs/aar')
     include '*.aar'
-    into '../addons/tamahochi_notify/bin'
+    into '../addons/pet_notify/bin'
 }
 afterEvaluate {
     tasks.named('assembleDebug') { finalizedBy 'copyAarToAddon' }

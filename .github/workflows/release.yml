@@ -50,7 +50,12 @@ jobs:
         run: |
           last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)
           IFS=. read -r major minor patch <<< "${last#v}"
-          version="$major.$minor.$((patch + 1))"
+          IFS=. read -r base_major base_minor < VERSION  # VERSION — «major.minor»; подняли его — патч с нуля
+          if [ "$base_major" -gt "$major" ] || { [ "$base_major" -eq "$major" ] && [ "$base_minor" -gt "$minor" ]; }; then
+            version="$base_major.$base_minor.0"
+          else
+            version="$major.$minor.$((patch + 1))"
+          fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
           sed -i "s/^version\/code=.*/version\/code=${{ github.run_number }}/; s/^version\/name=.*/version\/name=\"$version\"/" export_presets.cfg
           sed -i "s|^config/version=.*|config/version=\"$version\"|" project.godot  # версия на экране About
@@ -68,7 +73,7 @@ jobs:
         working-directory: android_plugin
         run: |
           bash ./gradlew --no-daemon assembleRelease
-          test -f ../addons/tamahochi_notify/bin/tamahochi-notify-release.aar  # AAR не в git — собираем здесь
+          test -f ../addons/pet_notify/bin/pet-notify-release.aar  # AAR не в git — собираем здесь
 
       - name: Export APK
         env:
@@ -78,10 +83,10 @@ jobs:
         run: |
           mkdir -p build
           $GODOT --headless --path . --import
-          $GODOT --headless --path . --install-android-build-template --export-release "Android" "build/tamahochi-v$VERSION.apk"
-          test -f "build/tamahochi-v$VERSION.apk"  # Godot не всегда возвращает ошибку кодом выхода
+          $GODOT --headless --path . --install-android-build-template --export-release "Android" "build/pixelpet-v$VERSION.apk"
+          test -f "build/pixelpet-v$VERSION.apk"  # Godot не всегда возвращает ошибку кодом выхода
 
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "v$VERSION" "build/tamahochi-v$VERSION.apk" --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes
+        run: gh release create "v$VERSION" "build/pixelpet-v$VERSION.apk" --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes

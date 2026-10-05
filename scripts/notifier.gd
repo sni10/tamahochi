@@ -1,7 +1,7 @@
 class_name Notifier
 ## Единая точка доставки уведомлений: на Android — плагин (синглтон PLUGIN), иначе — строка в лог.
 
-const PLUGIN := "TamahochiNotify"
+const PLUGIN := "PetNotify"
 
 
 static func _plugin() -> Object:

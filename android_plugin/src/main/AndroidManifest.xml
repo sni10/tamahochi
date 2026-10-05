@@ -7,8 +7,8 @@
     <application>
         <!-- Регистрация плагина Godot v2: имя синглтона → класс. -->
         <meta-data
-            android:name="org.godotengine.plugin.v2.TamahochiNotify"
-            android:value="com.sni10.tamahochi.notify.TamahochiNotifyPlugin" />
+            android:name="org.godotengine.plugin.v2.PetNotify"
+            android:value="com.sni10.pixelpet.notify.PetNotifyPlugin" />
 
         <receiver
             android:name=".CallReceiver"

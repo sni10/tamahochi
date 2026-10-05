@@ -18,14 +18,14 @@ func _exit_tree() -> void:
 
 class AndroidExport extends EditorExportPlugin:
 	func _get_name() -> String:
-		return "TamahochiNotify"
+		return "PetNotify"
 
 	func _supports_platform(platform: EditorExportPlatform) -> bool:
 		return platform is EditorExportPlatformAndroid
 
 	func _get_android_libraries(_platform: EditorExportPlatform, debug: bool) -> PackedStringArray:
 		# Путь — относительно res://addons/.
-		return PackedStringArray(["tamahochi_notify/bin/tamahochi-notify-%s.aar" % ("debug" if debug else "release")])
+		return PackedStringArray(["pet_notify/bin/pet-notify-%s.aar" % ("debug" if debug else "release")])
 
 	func _get_android_dependencies(_platform: EditorExportPlatform, _debug: bool) -> PackedStringArray:
 		return PackedStringArray(["androidx.core:core:1.13.1"])  # та же версия — в android_plugin/build.gradle

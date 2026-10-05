@@ -11,4 +11,4 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "tamahochi-notify"
+rootProject.name = "pet-notify"

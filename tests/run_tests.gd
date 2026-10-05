@@ -61,7 +61,7 @@ func test_sprite_loader() -> void:
 	r = Sprites.parse_sheet("oops\n", "t.txt")
 	check(r.error.contains("t.txt:1"), "строка без двоеточия")
 	r = Sprites.parse_sheet("name: CAT\n[a]\n.#\n#.\n", "t.txt")
-	check(r.error == "" and r.meta.name == "CAT" and r.sheet.a.w == 2 and r.sheet.a.rows[0][1] == 1, "разбор файла")
+	check(r.error == "" and r.meta.name == "CAT" and r.sheet.a.w == 2 and r.sheet.a.rows[0][1] == Palette.PEN, "разбор файла")
 	check(Sprites.parse_sheet("[a]\n####\n", "t").sheet.a.cropped(2).w == 2, "cropped")
 
 	var keys := Sprites.PETS.keys()
@@ -391,7 +391,7 @@ func _corner(lcd: Lcd) -> PackedByteArray:
 	var out := PackedByteArray()
 	for y in range(Game.PLAY_Y + 1, Game.PLAY_Y + 9):
 		for x in 40:
-			out.append(lcd.buf[y * Lcd.COLS + x])
+			out.append(1 if lcd.get_px(x, y) else 0)
 	return out
 
 
@@ -538,7 +538,9 @@ func _render(g: Game, frame: int) -> PackedByteArray:
 	var lcd := Lcd.new()
 	g.frame = frame
 	g.render(lcd)
-	var out := lcd.buf.duplicate()
+	var out := PackedByteArray()  # 1 — пиксель переднего плана есть, 0 — виден фон
+	for v in lcd.buf:
+		out.append(1 if v else 0)
 	lcd.free()
 	return out
 
@@ -580,11 +582,11 @@ func test_rain_sky() -> void:
 	var panel_clean := true
 	var sunny_buf := _render(sunny, 0)
 	for i in (Game.SEPARATOR_TOP + 1) * Lcd.COLS:
-		panel_clean = panel_clean and lcd.buf[i] == sunny_buf[i]
+		panel_clean = panel_clean and int(lcd.buf[i] != 0) == sunny_buf[i]
 	check(panel_clean, "туча и капли не заходят на панель шкал")
 	var low_same := true
 	for i in range(Game.RAIN_BOTTOM * Lcd.COLS, Game.GROUND * Lcd.COLS):
-		low_same = low_same and lcd.buf[i] == sunny_buf[i]
+		low_same = low_same and int(lcd.buf[i] != 0) == sunny_buf[i]
 	check(low_same, "капли не долетают до питомца")
 	lcd.free()
 	clean.free()
@@ -917,7 +919,7 @@ func test_about() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	for line in [["TAMAHOCHI", 48], ["V 0.0.0", 59], ["MADE BY SNI10", 81], ["WITH LOVE", 92], ["TO PETS", 103], ["B FEEDBACK", Game.ICON_Y]]:
+	for line in [["PIXEL PET", 48], ["V 0.0.0", 59], ["MADE BY SNI10", 81], ["WITH LOVE", 92], ["TO PETS", 103], ["FEEDBACK", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -932,7 +934,7 @@ func test_about() -> void:
 	g.press_c()
 	check(g.mode == "bag" and g.bag_item == Game.BAG_ABOUT, "C — назад в сумку на ABOUT")
 	var mail := Game.feedback_mailto()
-	check(mail.begins_with("mailto:d.strelets.a@gmail.com?subject=Tamahochi%20feedback&body=") and mail.contains("0.0.0"),
+	check(mail.begins_with("mailto:d.strelets.a@gmail.com?subject=Pixel%20Pet%20feedback&body=") and mail.contains("0.0.0"),
 			"письмо: адрес, тема, версия в теле — %s" % mail)
 
 
@@ -1026,12 +1028,12 @@ func test_shop_stubs() -> void:
 	g.mode = "bag"
 	g.bag_item = Game.BAG_PREMIUM
 	g.render(lcd)
-	for line in [["ALL PETS", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["A NEXT  B BUY", Game.ICON_Y]]:
+	for line in [["ALL PETS", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["NEXT  BUY", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
 		shown = shown and (not clean.buf[i] or lcd.buf[i])
-	check(shown, "страница PREMIUM: состав и B BUY")
+	check(shown, "страница PREMIUM: состав и BUY")
 	var before := g.profile.pills
 	g.press_b()
 	check(g.profile.premium and Shop.is_unlocked(g.profile, Sprites.PETS.cat) and g.profile.pills == before + 50
@@ -1067,7 +1069,7 @@ func test_new_game() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	for line in [["NEW GAME", 15], ["YOU WILL LEAVE", 44], ["YOUR PET", 53], ["B CONFIRM", Game.ICON_Y]]:
+	for line in [["NEW GAME", 15], ["YOU WILL LEAVE", 44], ["YOUR PET", 53], ["CONFIRM", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -1123,7 +1125,7 @@ func test_umbrella_shelter() -> void:
 		for py in range(uy, y):
 			for px in range(maxi(ux, 0), mini(ux + u.w, Lcd.COLS)):
 				var row := py - uy
-				var umbrella_px: bool = row < u.h and u.rows[row][px - ux] == 1
+				var umbrella_px: bool = row < u.h and u.rows[row][px - ux] != 0
 				ok = ok and (buf[py * Lcd.COLS + px] == 1) == umbrella_px
 	check(ok, "под зонтиком и сквозь купол капель нет — только сам зонтик")
 	Weather.enabled = false

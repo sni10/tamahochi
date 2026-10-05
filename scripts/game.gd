@@ -17,6 +17,7 @@ const SEPARATOR_TOP := 35
 const PLAY_Y := 37
 const GROUND := 126                 # «пол», на котором стоят спрайты
 const PLAY_AREA := Rect2i(0, PLAY_Y, COLS, GROUND - PLAY_Y)
+const FALL_BAND := 14  # ширина полос у краёв, где падает снег сцены
 const POOP_SLOT := 11               # кучки выстраиваются справа налево
 const SUN_X := 47
 const SUN_Y := PLAY_Y + 2
@@ -532,16 +533,36 @@ func render(lcd: Lcd) -> void:
 		_draw_select(lcd)
 		lcd.flush()
 		return
+	lcd.pen = Palette.INK
 	_draw_status(lcd)
+	lcd.pen = _room_ink()
 	if mode != "dead" and not _is_birth():
 		draw_text(lcd, "AGE %d" % floori(state.age / 86400), PLAY_Y + 2, 2)
 	if speed != 1.0:  # тестовое ускорение времени — чтобы не забыть, что оно включено
 		draw_text(lcd, "X%d" % speed, PLAY_Y + 9, 2)
+	_pet_pen(lcd)
 	call("_draw_" + mode, lcd)
+	lcd.fill = 0
 	if mode != "clean":
 		_draw_poops(lcd, state.poops)
+	lcd.pen = Palette.INK
 	_draw_menu(lcd)
 	lcd.flush()
+
+
+## Перо и заливка питомца; остальные предметы рисуются без заливки (сбрасывают fill сами).
+func _pet_pen(lcd: Lcd) -> void:
+	lcd.pen = skin().color
+	lcd.fill = skin().fill
+
+
+func _is_night() -> bool:
+	return Decay.is_night(state.clock, settings.quiet())
+
+
+## Цвет надписей и значков в комнате: на ночном небе — белый.
+func _room_ink() -> int:
+	return Palette.WHITE if _is_night() and not Weather.is_rain(state.clock) else Palette.INK
 
 
 static func _dotted(lcd: Lcd, y: int) -> void:
@@ -552,12 +573,13 @@ static func _dotted(lcd: Lcd, y: int) -> void:
 func _draw_status(lcd: Lcd) -> void:
 	var s := state
 	# [значок, значение, тревога — значок мигает]
+	# [значок, значение, тревога — значок мигает, цвет шкалы]
 	var bars := [
-		[Sprites.MINI_SATIETY, s.satiety, s.satiety < SAD_THRESHOLD],
-		[Sprites.MINI_HAPPINESS, s.happiness, s.happiness < SAD_THRESHOLD],
-		[Sprites.MINI_ENERGY, s.energy, s.energy < SAD_THRESHOLD],
-		[Sprites.MINI_HEALTH, s.health, s.health < SAD_THRESHOLD],
-		[Sprites.MINI_FEVER, s.fever, s.sick],
+		[Sprites.MINI_SATIETY, s.satiety, s.satiety < SAD_THRESHOLD, "o"],
+		[Sprites.MINI_HAPPINESS, s.happiness, s.happiness < SAD_THRESHOLD, "p"],
+		[Sprites.MINI_ENERGY, s.energy, s.energy < SAD_THRESHOLD, "u"],
+		[Sprites.MINI_HEALTH, s.health, s.health < SAD_THRESHOLD, "g"],
+		[Sprites.MINI_FEVER, s.fever, s.sick, "r"],
 	]
 	var inner_w := BAR_W - 2
 	for i in bars.size():
@@ -570,23 +592,47 @@ func _draw_status(lcd: Lcd) -> void:
 		for row in range(1, 4):
 			lcd.set_px(BAR_X, y + row)
 			lcd.set_px(BAR_X + BAR_W - 1, y + row)
+			lcd.pen = Palette.index(bars[i][3])
 			lcd.hline(BAR_X + 1, y + row, roundi(bars[i][1] / 100.0 * inner_w))
+			lcd.pen = Palette.INK
 
 
 func _draw_room(lcd: Lcd) -> void:
-	_dotted(lcd, GROUND + 1)
-	if Weather.is_rain(state.clock):
+	var rain := Weather.is_rain(state.clock)
+	var night := _is_night()  # игровая ночь = тихие часы: питомец спит до утра
+	var sky := Palette.SKY_RAIN if rain else Palette.SKY_NIGHT if night else Palette.SKY_DAY
+	lcd.fill_bg(Rect2i(0, SEPARATOR_TOP + 1, COLS, GROUND - SEPARATOR_TOP - 1), sky)
+	_draw_scene(lcd, Sprites.SCENES[skin().scene])
+	if rain:
 		_draw_rain(lcd)
 		return
-	if Decay.is_night(state.clock, settings.quiet()):  # игровая ночь = тихие часы: питомец спит до утра
+	if night:
 		var sun: Sprites.Sprite = Sprites.SUN[0]
+		lcd.pen = Palette.index("y")
 		lcd.blit(Sprites.MOON, SUN_X + (sun.w - Sprites.MOON.w) / 2, SUN_Y + (sun.h - Sprites.MOON.h) / 2)
 	else:
+		lcd.pen = Palette.index("o")
 		lcd.blit(Sprites.SUN[frame / 2 % 2], SUN_X, SUN_Y)
 	var span := COLS + Sprites.CLOUD.w
 	var cloud_x := (frame / 2) % span - Sprites.CLOUD.w
 	lcd.erase(Sprites.CLOUD_MASK, cloud_x, CLOUD_Y)
+	lcd.blit_bg(Sprites.CLOUD_MASK, cloud_x, CLOUD_Y, false, Palette.WHITE)  # облако белое внутри
+	lcd.pen = Palette.index("e")
 	lcd.blit(Sprites.CLOUD, cloud_x, CLOUD_Y)
+
+
+## Земля и декор сцены у краёв комнаты (фон: питомец, кучки и погода — поверх).
+func _draw_scene(lcd: Lcd, sc: Sprites.Scene) -> void:
+	lcd.fill_bg(Rect2i(0, GROUND, COLS, SEPARATOR_BOTTOM - GROUND), sc.ground)
+	lcd.fill_bg(Rect2i(0, GROUND, COLS, 1), sc.edge)
+	lcd.blit_bg(sc.left, 0, GROUND - sc.left.h)
+	lcd.blit_bg(sc.right, COLS - sc.right.w, GROUND - sc.right.h)
+	if sc.fall:  # падает у краёв: по пять штук на сторону, у каждой своя скорость и сдвиг
+		var band := FALL_BAND - sc.fall.w
+		for i in 10:
+			var x := (i * 5) % band + (0 if i % 2 == 0 else COLS - FALL_BAND)
+			var y := PLAY_Y + (frame * (1 + i % 3) + i * 29) % (GROUND - PLAY_Y)
+			lcd.blit_bg(sc.fall, x, y, false, Palette.WHITE, PLAY_AREA)
 
 
 ## Туча у правого края (левее — надпись возраста), капли — под тучей и выше питомца,
@@ -594,7 +640,9 @@ func _draw_room(lcd: Lcd) -> void:
 func _draw_rain(lcd: Lcd) -> void:
 	var cloud := Sprites.RAIN_CLOUD
 	var cloud_x := COLS - cloud.w - 1
+	lcd.pen = Palette.index("d")
 	lcd.blit(cloud, cloud_x, RAIN_CLOUD_Y)
+	lcd.pen = Palette.index("u")
 	var drop: Sprites.Sprite = Sprites.RAIN[frame % 2]
 	var rain_area := Rect2i(cloud_x, 0, cloud.w, RAIN_BOTTOM)
 	for y in range(RAIN_CLOUD_Y + cloud.h, RAIN_BOTTOM, drop.h):
@@ -627,7 +675,9 @@ func _poop_x(i: int) -> int:
 func _draw_poops(lcd: Lcd, count: int) -> void:
 	for i in count:
 		var x := _poop_x(i)
+		lcd.pen = Palette.index("b")
 		lcd.blit(Sprites.POOP, x, GROUND - Sprites.POOP.h)
+		lcd.pen = Palette.index("g")
 		lcd.blit(Sprites.STINK, x + 3, GROUND - Sprites.POOP.h - 7, (frame + i) % 2 == 1)
 
 
@@ -641,6 +691,8 @@ func _draw_pet(lcd: Lcd, x: int) -> void:
 	_draw_umbrella(lcd, x, y, lk.w)
 	if s.sleeping:
 		lcd.blit(lk.sleep, x, y)
+		lcd.pen = _room_ink()
+		lcd.fill = 0
 		if frame % 2:
 			lcd.blit(Sprites.Z_BIG, x + lk.w + 2, y - 14)
 		else:
@@ -650,6 +702,8 @@ func _draw_pet(lcd: Lcd, x: int) -> void:
 	var frames: Array = lk.sad if sad else lk.idle
 	lcd.blit(frames[frame % 2], x, y, pet_dir < 0)
 	if s.sick and frame % 2:  # череп над головой больного
+		lcd.pen = _room_ink()
+		lcd.fill = 0
 		lcd.blit(Sprites.SICK, x + lk.w - 3, y - Sprites.SICK.h - 2)
 
 
@@ -660,13 +714,20 @@ func _draw_umbrella(lcd: Lcd, x: int, y: int, w: int) -> void:
 		var ux := x + (w - u.w) / 2
 		var uy := y - u.h - 1
 		lcd.erase_rect(ux, uy, u.w, y - uy)  # зонтик закрывает капли — под ним сухо
+		var pen := lcd.pen
+		var fill := lcd.fill
+		lcd.pen = Palette.index("r")
+		lcd.fill = 0
 		lcd.blit(u, ux, uy, false, PLAY_AREA)
+		lcd.pen = pen
+		lcd.fill = fill
 
 
 func _draw_birth(lcd: Lcd) -> void:
 	var waking := state.age >= Evolution.BIRTH_UNTIL - WAKE_BEFORE
 	var wobble: int = [0, 1, 0, -1][frame % 4] if waking or frame % 8 < 4 else 0
 	var sprite := _birth_sprite(waking)
+	lcd.pen = Palette.index("b")
 	lcd.blit(sprite, _home_x() + wobble, _y_for(sprite.h))
 
 
@@ -696,6 +757,8 @@ func _draw_eat(lcd: Lcd) -> void:
 	_draw_umbrella(lcd, x, _y_for(lk.h), lk.w)
 	var bites := mode_ticks / 2
 	if bites < 4:
+		lcd.pen = Palette.index("r")
+		lcd.fill = 0
 		var food := Sprites.FOOD.cropped(Sprites.FOOD.w - bites * 3)
 		lcd.blit(food, food_x, GROUND - food.h)
 
@@ -725,6 +788,8 @@ func _draw_clean(lcd: Lcd) -> void:
 	if top + wave.h < GROUND - Sprites.POOP.h + 2:
 		_draw_poops(lcd, cleaning_poops)
 	lcd.erase_rect(0, top, COLS, wave.h)  # под волной питомца не видно
+	lcd.pen = Palette.index("u")
+	lcd.fill = 0
 	var shift := wave.w / 2 if frame % 2 else 0  # волна «катится» вбок
 	for x in range(-shift, COLS, wave.w):
 		lcd.blit(wave, x, top, false, PLAY_AREA)
@@ -733,6 +798,7 @@ func _draw_clean(lcd: Lcd) -> void:
 func _draw_dead(lcd: Lcd) -> void:
 	var ghost := Sprites.GHOST
 	var y := _y_for(ghost.h) - 6 + 2 * (frame % 2)
+	lcd.pen = _room_ink()
 	lcd.blit(ghost, _center_for(ghost.w), y, false, PLAY_AREA)
 	_hit(PLAY_AREA, press_b)  # тап по комнате — к выбору нового питомца
 
@@ -745,6 +811,8 @@ func _draw_heal(lcd: Lcd) -> void:
 	lcd.blit(lk.happy, x, y)
 	_draw_umbrella(lcd, x, y, lk.w)
 	var plus: Sprites.Sprite = Sprites.FONT["+"]
+	lcd.pen = Palette.index("r")
+	lcd.fill = 0
 	var spots := [[-5, 4], [lk.w + 2, 8], [-3, 16], [lk.w, 0]]
 	for i in spots.size():
 		if (i + mode_ticks) % 2:
@@ -755,6 +823,7 @@ func _draw_heal(lcd: Lcd) -> void:
 
 func _draw_select(lcd: Lcd) -> void:
 	var sk := skin()
+	lcd.pen = Palette.INK
 	# Имя (латиницей) крупным шрифтом в верхней панели и точки-страницы под ним.
 	draw_text(lcd, sk.name, NAME_Y, -1, 2)
 	var count := Sprites.PETS.size()
@@ -769,7 +838,10 @@ func _draw_select(lcd: Lcd) -> void:
 	var lk := look()
 	var pet_y := _y_for(lk.h)
 	var x := _center_for(lk.w)
+	_pet_pen(lcd)
 	lcd.blit(lk.idle[frame % 2], x, pet_y)
+	lcd.pen = _room_ink()
+	lcd.fill = 0
 	# Комната делится на три зоны: слева — предыдущий, питомец — выбрать, справа — следующий.
 	_hit(Rect2i(0, PLAY_Y, x, GROUND - PLAY_Y), press_a)
 	_hit(Rect2i(x, PLAY_Y, lk.w, GROUND - PLAY_Y), press_b)
@@ -782,16 +854,15 @@ func _draw_select(lcd: Lcd) -> void:
 	var arrow_y := pet_y + (lk.h - Sprites.ARROW_LEFT.h) / 2
 	lcd.blit(Sprites.ARROW_LEFT, 4, arrow_y)
 	lcd.blit(Sprites.ARROW_RIGHT, COLS - 4 - Sprites.ARROW_RIGHT.w, arrow_y)
-	# Подсказка на месте меню: A ◀   B   ▶ C
+	lcd.pen = Palette.INK
+	# Подсказка на месте меню: ◀   OK   ▶
 	var hint_y := ICON_Y + 3
-	draw_text(lcd, "A", hint_y, ICON_X + 2)
-	lcd.blit(Sprites.ARROW_LEFT, ICON_X + 8, hint_y)
+	lcd.blit(Sprites.ARROW_LEFT, ICON_X + 4, hint_y)
 	_hit(Rect2i(ICON_X, hint_y - 2, 14, 9), press_a)
 	if unlocked:
-		draw_text(lcd, "B", hint_y)
-		_hit(Rect2i((COLS - 8) / 2, hint_y - 2, 8, 9), press_b)
-	lcd.blit(Sprites.ARROW_RIGHT, COLS - ICON_X - 12, hint_y)
-	draw_text(lcd, "C", hint_y, COLS - ICON_X - 6)
+		draw_text(lcd, "OK", hint_y)
+		_hit(Rect2i((COLS - 12) / 2, hint_y - 2, 12, 9), press_b)
+	lcd.blit(Sprites.ARROW_RIGHT, COLS - ICON_X - 8, hint_y)
 	_hit(Rect2i(COLS - ICON_X - 14, hint_y - 2, 14, 9), press_c)
 
 
@@ -850,8 +921,8 @@ func _draw_settings(lcd: Lcd) -> void:
 	var now := Decay.local_time(state.clock)
 	draw_text(lcd, settings_note if settings_note else "NOW %02d:%02d" % [now.hour, now.minute], 120)
 	var action: String = ["+1", "+1", "SET", "OPEN"][settings_field]
-	_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B " + action, press_b]])
-	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+	_hints(lcd, ICON_Y, [["NEXT", press_a], [action, press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 
 
 # --- экран разрешения на уведомления ---
@@ -861,7 +932,7 @@ func _draw_notify_ask(lcd: Lcd) -> void:
 	var lines := ["I WILL CALL YOU", "WHEN I NEED YOU", "", "PLEASE ALLOW", "NOTIFICATIONS"]
 	for i in lines.size():
 		draw_text(lcd, lines[i], 50 + i * 10)
-	_hints(lcd, ICON_Y + 3, [["B OK", press_b]])
+	_hints(lcd, ICON_Y + 3, [["OK", press_b]])
 	_hit(Rect2i(0, 0, COLS, ROWS), press_b)  # тап в любом месте — OK
 
 
@@ -880,16 +951,16 @@ static func feedback_mailto() -> String:
 Version: %s
 Device: %s
 OS: %s %s" % [version(), OS.get_model_name(), OS.get_name(), OS.get_version()]
-	return "mailto:%s?subject=%s&body=%s" % [FEEDBACK_EMAIL, "Tamahochi feedback".uri_encode(), body.uri_encode()]
+	return "mailto:%s?subject=%s&body=%s" % [FEEDBACK_EMAIL, "Pixel Pet feedback".uri_encode(), body.uri_encode()]
 
 
 func _draw_about(lcd: Lcd) -> void:
 	draw_text(lcd, "ABOUT", 15)
-	var lines := ["TAMAHOCHI", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
+	var lines := ["PIXEL PET", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
 	for i in lines.size():
 		draw_text(lcd, lines[i], 48 + i * 11)
-	_hints(lcd, ICON_Y, [["B FEEDBACK", press_b]])
-	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+	_hints(lcd, ICON_Y, [["FEEDBACK", press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 
 
 # --- экран «новая игра» ---
@@ -899,9 +970,12 @@ func _draw_abandon(lcd: Lcd) -> void:
 	draw_text(lcd, "YOU WILL LEAVE", 44)
 	draw_text(lcd, "YOUR PET", 53)
 	var sad: Sprites.Sprite = look().sad[frame % 2]
+	_pet_pen(lcd)
 	lcd.blit(sad, _center_for(sad.w), 112 - sad.h)
-	_hints(lcd, ICON_Y, [["B CONFIRM", press_b]])
-	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+	lcd.pen = Palette.INK
+	lcd.fill = 0
+	_hints(lcd, ICON_Y, [["CONFIRM", press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 
 
 # --- экран сумки ---
@@ -922,8 +996,8 @@ func _draw_bag(lcd: Lcd) -> void:
 		var lines := ["ALL PETS", "%d PILLS" % Shop.PREMIUM_PILLS, "%d SYRINGES" % Shop.PREMIUM_SYRINGES, "%d UMBRELLAS" % Shop.PREMIUM_UMBRELLAS]
 		for i in lines.size():
 			draw_text(lcd, lines[i], 95 + i * 8)
-		_hints(lcd, ICON_Y, [["OWNED", null]] if profile.premium else [["A NEXT", press_a], ["B BUY", press_b]])
-		_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+		_hints(lcd, ICON_Y, [["OWNED", null]] if profile.premium else [["NEXT", press_a], ["BUY", press_b]])
+		_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 		return
 	if bag_item == PILL:
 		draw_text(lcd, "FREE %d/%d  X%d" % [pills_left(), FREE_PILLS_PER_DAY, profile.pills], 96)
@@ -942,11 +1016,11 @@ func _draw_bag(lcd: Lcd) -> void:
 					lcd.blit(Sprites.ARROW_RIGHT, 14, 107 + i * 8)
 				draw_text(lcd, labels[i], 107 + i * 8, 20)
 				_hit(Rect2i(0, 106 + i * 8, COLS, 8), _tap_action.bind(i))
-			_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B OK", press_b]])
+			_hints(lcd, ICON_Y, [["NEXT", press_a], ["OK", press_b]])
 		else:
-			_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B MENU", press_b]])
-		_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+			_hints(lcd, ICON_Y, [["NEXT", press_a], ["MENU", press_b]])
+		_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 		return
 	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT, BAG_NEW] else "SET"
-	_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B " + action, press_b]])
-	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+	_hints(lcd, ICON_Y, [["NEXT", press_a], [action, press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
