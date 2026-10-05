@@ -624,11 +624,9 @@ func _poop_x(i: int) -> int:
 	return COLS - (i + 1) * POOP_SLOT + 1
 
 
-func _draw_poops(lcd: Lcd, count: int, max_x := COLS) -> void:
+func _draw_poops(lcd: Lcd, count: int) -> void:
 	for i in count:
 		var x := _poop_x(i)
-		if x >= max_x:
-			continue
 		lcd.blit(Sprites.POOP, x, GROUND - Sprites.POOP.h)
 		lcd.blit(Sprites.STINK, x + 3, GROUND - Sprites.POOP.h - 7, (frame + i) % 2 == 1)
 
@@ -714,14 +712,34 @@ func _draw_no(lcd: Lcd) -> void:
 	_draw_umbrella(lcd, maxi(0, _home_x() + shake), _y_for(look().h), look().w)
 
 
+## Нижний край волны уборки: за анимацию спускается от верха комнаты до пола.
+func _wave_front() -> int:
+	return PLAY_Y + (mode_ticks + 1) * (GROUND - PLAY_Y) / ANIM_LENGTH["clean"]
+
+
 func _draw_clean(lcd: Lcd) -> void:
-	# Волна идёт справа налево и смывает кучки, которые уже прошла.
-	var wave_x := COLS - (mode_ticks + 1) * COLS / ANIM_LENGTH["clean"]
-	_draw_pet(lcd, _home_x() if state.sleeping else pet_x)
-	_draw_poops(lcd, cleaning_poops, wave_x)
+	# Гребень на всю ширину спускается сверху вниз, накрывает питомца и смывает кучки у пола.
 	var wave := Sprites.WAVE
-	for y in range(GROUND - wave.h, PLAY_Y, -wave.h):
-		lcd.blit(wave, wave_x, y, frame % 2 == 1)
+	var front := _wave_front()
+	var top := front - wave.h
+	_draw_pet(lcd, _home_x() if state.sleeping else pet_x)
+	if front < GROUND - Sprites.POOP.h + 2:
+		_draw_poops(lcd, cleaning_poops)
+	# След воды над гребнем: рябь редеет кверху и переливается от кадра к кадру.
+	for y in range(PLAY_Y, top):
+		var d := top - y
+		var step := 2 if d <= 3 else 4 if d <= 8 else 8 if d <= 16 else 0
+		if step:
+			for x in COLS:
+				if (x + 2 * y + frame) % step == 0:
+					lcd.set_px(x, y)
+	lcd.erase_rect(0, top, COLS, wave.h)  # под гребнем питомца не видно
+	var shift := wave.w / 2 if frame % 2 else 0  # гребень «катится» вбок
+	for x in range(-shift, COLS, wave.w):
+		lcd.blit(wave, x, top, false, PLAY_AREA)
+	var foam := Sprites.WAVE_FOAM
+	for x in range(0, COLS, foam.w):
+		lcd.blit(foam, x, front + 1, frame % 2 == 1, PLAY_AREA)
 
 
 func _draw_dead(lcd: Lcd) -> void:
