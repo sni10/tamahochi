@@ -61,7 +61,7 @@ func test_sprite_loader() -> void:
 	r = Sprites.parse_sheet("oops\n", "t.txt")
 	check(r.error.contains("t.txt:1"), "строка без двоеточия")
 	r = Sprites.parse_sheet("name: CAT\n[a]\n.#\n#.\n", "t.txt")
-	check(r.error == "" and r.meta.name == "CAT" and r.sheet.a.w == 2 and r.sheet.a.rows[0][1] == 1, "разбор файла")
+	check(r.error == "" and r.meta.name == "CAT" and r.sheet.a.w == 2 and r.sheet.a.rows[0][1] == Palette.PEN, "разбор файла")
 	check(Sprites.parse_sheet("[a]\n####\n", "t").sheet.a.cropped(2).w == 2, "cropped")
 
 	var keys := Sprites.PETS.keys()
@@ -391,7 +391,7 @@ func _corner(lcd: Lcd) -> PackedByteArray:
 	var out := PackedByteArray()
 	for y in range(Game.PLAY_Y + 1, Game.PLAY_Y + 9):
 		for x in 40:
-			out.append(lcd.buf[y * Lcd.COLS + x])
+			out.append(1 if lcd.get_px(x, y) else 0)
 	return out
 
 
@@ -538,7 +538,9 @@ func _render(g: Game, frame: int) -> PackedByteArray:
 	var lcd := Lcd.new()
 	g.frame = frame
 	g.render(lcd)
-	var out := lcd.buf.duplicate()
+	var out := PackedByteArray()  # 1 — пиксель переднего плана есть, 0 — виден фон
+	for v in lcd.buf:
+		out.append(1 if v else 0)
 	lcd.free()
 	return out
 
@@ -580,11 +582,11 @@ func test_rain_sky() -> void:
 	var panel_clean := true
 	var sunny_buf := _render(sunny, 0)
 	for i in (Game.SEPARATOR_TOP + 1) * Lcd.COLS:
-		panel_clean = panel_clean and lcd.buf[i] == sunny_buf[i]
+		panel_clean = panel_clean and int(lcd.buf[i] != 0) == sunny_buf[i]
 	check(panel_clean, "туча и капли не заходят на панель шкал")
 	var low_same := true
 	for i in range(Game.RAIN_BOTTOM * Lcd.COLS, Game.GROUND * Lcd.COLS):
-		low_same = low_same and lcd.buf[i] == sunny_buf[i]
+		low_same = low_same and int(lcd.buf[i] != 0) == sunny_buf[i]
 	check(low_same, "капли не долетают до питомца")
 	lcd.free()
 	clean.free()
@@ -1123,7 +1125,7 @@ func test_umbrella_shelter() -> void:
 		for py in range(uy, y):
 			for px in range(maxi(ux, 0), mini(ux + u.w, Lcd.COLS)):
 				var row := py - uy
-				var umbrella_px: bool = row < u.h and u.rows[row][px - ux] == 1
+				var umbrella_px: bool = row < u.h and u.rows[row][px - ux] != 0
 				ok = ok and (buf[py * Lcd.COLS + px] == 1) == umbrella_px
 	check(ok, "под зонтиком и сквозь купол капель нет — только сам зонтик")
 	Weather.enabled = false

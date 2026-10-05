@@ -1,7 +1,12 @@
 ; Свойства питомца. Стадии лежат рядом: baby, child, adult_good, adult_normal, adult_bad.
 ; birth — откуда появляется: egg (яйцо) или basket (корзинка).
+; color — буква палитры (scripts/palette.gd): контур питомца; fill — заливка тела (светлый тон).
+; scene — окружение комнаты из assets/scenes (meadow, forest, park, beach, ice).
 ; free: yes — бесплатный; без этого свойства питомец платный (покупка или Premium).
 ; Нет файла стадии — берётся ближайшая нарисованная (в итоге adult_normal).
 name: BUNNY
 order: 2
 birth: basket
+color: d
+fill: i
+scene: forest

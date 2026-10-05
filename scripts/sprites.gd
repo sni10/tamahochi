@@ -19,6 +19,7 @@ static var error := ""
 static var FONT: Dictionary
 static var BIRTH: Dictionary  # egg/basket -> [обычный кадр, кадр «вот-вот появится»]
 static var PETS: Dictionary   # ключ вида -> PetSkin, по (order, ключ)
+static var SCENES: Dictionary  # ключ -> Scene (assets/scenes/<ключ>.txt)
 
 static var ICON_FOOD: Sprite
 static var ICON_PLAY: Sprite
@@ -63,6 +64,7 @@ static var MOON: Sprite
 class Sprite:
 	var lines: PackedStringArray
 	var rows: Array[PackedByteArray] = []
+	var inner: Array[PackedByteArray] = []  # 1 — прозрачный пиксель внутри контура (заливка тела); пусто — не считали
 	var w: int
 	var h: int
 
@@ -74,8 +76,33 @@ class Sprite:
 			var row := PackedByteArray()
 			row.resize(w)
 			for i in w:
-				row[i] = 1 if line[i] == "#" else 0
+				var ch := line[i]
+				row[i] = Palette.PEN if ch == "#" else 0 if ch == "." else Palette.index(ch)
 			rows.append(row)
+
+	## Найти пиксели внутри контура: прозрачные, до которых не дойти от края спрайта по прозрачным.
+	func find_inner() -> void:
+		var outside := {}
+		var stack: Array[Vector2i] = []
+		for x in w:
+			stack.append(Vector2i(x, 0))
+			stack.append(Vector2i(x, h - 1))
+		for y in h:
+			stack.append(Vector2i(0, y))
+			stack.append(Vector2i(w - 1, y))
+		while stack:
+			var p: Vector2i = stack.pop_back()
+			if p.x < 0 or p.y < 0 or p.x >= w or p.y >= h or outside.has(p) or rows[p.y][p.x]:
+				continue
+			outside[p] = true
+			stack.append_array([p + Vector2i.LEFT, p + Vector2i.RIGHT, p + Vector2i.UP, p + Vector2i.DOWN])
+		inner.clear()
+		for y in h:
+			var row := PackedByteArray()
+			row.resize(w)
+			for x in w:
+				row[x] = 1 if not rows[y][x] and not outside.has(Vector2i(x, y)) else 0
+			inner.append(row)
 
 	## Оставить только левые `width` столбцов (для «откусанной» еды).
 	func cropped(width: int) -> Sprite:
@@ -97,6 +124,16 @@ class Look:
 	var sleep: Sprite
 
 
+## Окружение комнаты: земля и декор у левого и правого края (фон, питомец ходит перед ним).
+class Scene:
+	var key: String
+	var ground: int  # цвет полосы земли
+	var edge: int    # цвет верхней кромки земли (трава, пена)
+	var left: Sprite
+	var right: Sprite
+	var fall: Sprite  # падает у краёв (снежинки); null — ничего не падает
+
+
 ## Внешность одного вида питомца на всех стадиях.
 class PetSkin:
 	var key: String
@@ -104,6 +141,9 @@ class PetSkin:
 	var order: int
 	var birth: String
 	var free: bool
+	var color: int  # цвет «пера» питомца (индекс палитры)
+	var fill: int   # цвет заливки тела
+	var scene: String  # ключ сцены из assets/scenes
 	var looks := {}
 
 	func look(stage: String) -> Look:
@@ -149,8 +189,8 @@ static func parse_sheet(text: String, fname: String) -> Dictionary:
 			meta[line.substr(0, sep).strip_edges()] = line.substr(sep + 1).strip_edges()
 			continue
 		for ch in line:
-			if ch != "#" and ch != ".":
-				return {"error": "%s:%d: в спрайте допустимы только '#' и '.'" % [fname, n]}
+			if ch != "#" and ch != "." and not Palette.index(ch):
+				return {"error": "%s:%d: в спрайте допустимы '#', '.' и буквы палитры %s" % [fname, n, "".join(Palette.COLORS.keys())]}
 		rows.append(line)
 	var last_err := _finish(sheet, name, rows, fname, start)
 	if last_err:
@@ -206,6 +246,8 @@ static func load_look(path: String) -> Look:
 	if look.w > PET_MAX or look.h > PET_MAX:
 		_fail("%s: кадры %dx%d больше %dx%d" % [name, look.w, look.h, PET_MAX, PET_MAX])
 		return null
+	for sp in f.values():
+		sp.find_inner()
 	look.idle = [f.idle1, f.idle2]
 	look.sad = [f.sad1, f.sad2]
 	look.happy = f.happy
@@ -231,6 +273,18 @@ static func load_skin(folder: String) -> PetSkin:
 	if not BIRTH.has(skin.birth):
 		_fail("pets/%s/pet.txt: birth должен быть одним из %s" % [skin.key, BIRTH.keys()])
 		return null
+	skin.color = Palette.index(meta.get("color", "k"))
+	if not skin.color:
+		_fail("pets/%s/pet.txt: color — буква палитры %s" % [skin.key, "".join(Palette.COLORS.keys())])
+		return null
+	skin.fill = Palette.index(meta.get("fill", "w"))
+	if not skin.fill:
+		_fail("pets/%s/pet.txt: fill — буква палитры %s" % [skin.key, "".join(Palette.COLORS.keys())])
+		return null
+	skin.scene = meta.get("scene", "meadow")
+	if not SCENES.has(skin.scene):
+		_fail("pets/%s/pet.txt: scene должна быть одной из %s" % [skin.key, SCENES.keys()])
+		return null
 	for st in STAGE_FALLBACK:
 		var path := "%s/%s.txt" % [folder, st]
 		if FileAccess.file_exists(path):
@@ -242,6 +296,38 @@ static func load_skin(folder: String) -> PetSkin:
 		_fail("pets/%s: обязателен файл adult_normal.txt" % skin.key)
 		return null
 	return skin
+
+
+static func load_scene(path: String) -> Scene:
+	var res := load_sheet(path)
+	if res.error:
+		_fail(res.error)
+		return null
+	var file := "scenes/" + path.get_file()
+	var sc := Scene.new()
+	sc.key = path.get_file().get_basename()
+	sc.ground = Palette.index(res.meta.get("ground", ""))
+	sc.edge = Palette.index(res.meta.get("edge", res.meta.get("ground", "")))
+	if not sc.ground or not sc.edge:
+		_fail("%s: ground и edge — буквы палитры" % file)
+		return null
+	sc.left = _require(res.sheet, "left", file)
+	sc.right = _require(res.sheet, "right", file)
+	sc.fall = res.sheet.get("fall")
+	return sc if sc.left and sc.right else null
+
+
+static func _load_scenes() -> Dictionary:
+	var out := {}
+	for f in DirAccess.get_files_at(ROOT + "/scenes"):
+		if f.get_extension() == "txt":
+			var sc := load_scene(ROOT + "/scenes/" + f)
+			if sc == null:
+				return {}
+			out[sc.key] = sc
+	if out.is_empty():
+		_fail("в assets/scenes нет ни одной сцены")
+	return out
 
 
 static func _load_pets() -> Dictionary:
@@ -279,6 +365,7 @@ static func _static_init() -> void:
 		"egg": [_require(world, "egg", "world.txt"), _require(world, "egg_crack", "world.txt")],
 		"basket": [_require(world, "basket", "world.txt"), _require(world, "basket_wake", "world.txt")],
 	}
+	SCENES = _load_scenes()
 	PETS = _load_pets()
 
 	ICON_FOOD = _require(ui, "icon_food", "ui.txt")

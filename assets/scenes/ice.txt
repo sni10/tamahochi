@@ -1,0 +1,26 @@
+; Льды: сугробы и льдины, у краёв вместо деревьев падает снег.
+; ground — цвет земли, edge — её верхней кромки. [left]/[right] — декор у краёв по низу комнаты,
+; [fall] — что падает у краёв (необязательно). Буквы — цвета палитры (scripts/palette.gd).
+ground: w
+edge: c
+
+[left]
+..................uuu...
+.................ucccu..
+.....wwww.......uccwccu.
+...wwwwwwww.....ucwccccu
+.wwwwwwwwwwwww..uccccccu
+wwwwwwwwwwwwwwwwuuuuuuuu
+
+[right]
+..uuu...................
+.ucccu..................
+uccwccu......wwww.......
+ucwccccu...wwwwwwww.....
+uccccccu.wwwwwwwwwwwww..
+uuuuuuuuwwwwwwwwwwwwwwww
+
+[fall]
+#.#
+.#.
+#.#
