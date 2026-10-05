@@ -1,4 +1,4 @@
-package com.sni10.tamahochi.notify
+package com.sni10.pixelpet.notify
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -8,10 +8,10 @@ import org.godotengine.godot.Godot
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.UsedByGodot
 
-/** Синглтон `TamahochiNotify` для GDScript (scripts/notifier.gd). */
-class TamahochiNotifyPlugin(godot: Godot) : GodotPlugin(godot) {
+/** Синглтон `PetNotify` для GDScript (scripts/notifier.gd). */
+class PetNotifyPlugin(godot: Godot) : GodotPlugin(godot) {
 
-    override fun getPluginName() = "TamahochiNotify"
+    override fun getPluginName() = "PetNotify"
 
     /** Запланировать цепочку зовов: JSON [{"at" (unix, с), "title", "body"}, ...]; прежняя заменяется. */
     @UsedByGodot

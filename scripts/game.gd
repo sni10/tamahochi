@@ -880,12 +880,12 @@ static func feedback_mailto() -> String:
 Version: %s
 Device: %s
 OS: %s %s" % [version(), OS.get_model_name(), OS.get_name(), OS.get_version()]
-	return "mailto:%s?subject=%s&body=%s" % [FEEDBACK_EMAIL, "Tamahochi feedback".uri_encode(), body.uri_encode()]
+	return "mailto:%s?subject=%s&body=%s" % [FEEDBACK_EMAIL, "Pixel Pet feedback".uri_encode(), body.uri_encode()]
 
 
 func _draw_about(lcd: Lcd) -> void:
 	draw_text(lcd, "ABOUT", 15)
-	var lines := ["TAMAHOCHI", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
+	var lines := ["PIXEL PET", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
 	for i in lines.size():
 		draw_text(lcd, lines[i], 48 + i * 11)
 	_hints(lcd, ICON_Y, [["B FEEDBACK", press_b]])

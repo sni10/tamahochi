@@ -1,4 +1,4 @@
-package com.sni10.tamahochi.notify
+package com.sni10.pixelpet.notify
 
 import android.annotation.SuppressLint
 import android.app.AlarmManager
@@ -20,10 +20,10 @@ import org.json.JSONObject
  * по возрастанию "at". Обычный (неточный) будильник на ближайший зов; сработал — уведомление и будильник на следующий.
  */
 object Calls {
-    private const val PREFS = "tamahochi_notify"
+    private const val PREFS = "pet_notify"
     const val CHANNEL = "calls"
     private const val NOTIFICATION_ID = 1
-    const val TAG = "TamahochiNotify"  // adb logcat -s TamahochiNotify godot
+    const val TAG = "PetNotify"  // adb logcat -s PetNotify godot
 
     fun save(ctx: Context, json: String) {
         prefs(ctx).edit().putString("calls", json).apply()
@@ -64,7 +64,7 @@ object Calls {
         Log.i(TAG, "show: $title — $body")
         val open = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
         val notification = NotificationCompat.Builder(ctx, CHANNEL)
-            .setSmallIcon(R.drawable.ic_tamahochi_call)
+            .setSmallIcon(R.drawable.ic_pet_call)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

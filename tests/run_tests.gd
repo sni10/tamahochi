@@ -917,7 +917,7 @@ func test_about() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	for line in [["TAMAHOCHI", 48], ["V 0.0.0", 59], ["MADE BY SNI10", 81], ["WITH LOVE", 92], ["TO PETS", 103], ["B FEEDBACK", Game.ICON_Y]]:
+	for line in [["PIXEL PET", 48], ["V 0.0.0", 59], ["MADE BY SNI10", 81], ["WITH LOVE", 92], ["TO PETS", 103], ["B FEEDBACK", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -932,7 +932,7 @@ func test_about() -> void:
 	g.press_c()
 	check(g.mode == "bag" and g.bag_item == Game.BAG_ABOUT, "C — назад в сумку на ABOUT")
 	var mail := Game.feedback_mailto()
-	check(mail.begins_with("mailto:d.strelets.a@gmail.com?subject=Tamahochi%20feedback&body=") and mail.contains("0.0.0"),
+	check(mail.begins_with("mailto:d.strelets.a@gmail.com?subject=Pixel%20Pet%20feedback&body=") and mail.contains("0.0.0"),
 			"письмо: адрес, тема, версия в теле — %s" % mail)
 
 
