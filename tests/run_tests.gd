@@ -919,7 +919,7 @@ func test_about() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	for line in [["PIXEL PET", 48], ["V 0.0.0", 59], ["MADE BY SNI10", 81], ["WITH LOVE", 92], ["TO PETS", 103], ["B FEEDBACK", Game.ICON_Y]]:
+	for line in [["PIXEL PET", 48], ["V 0.0.0", 59], ["MADE BY SNI10", 81], ["WITH LOVE", 92], ["TO PETS", 103], ["FEEDBACK", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -1028,12 +1028,12 @@ func test_shop_stubs() -> void:
 	g.mode = "bag"
 	g.bag_item = Game.BAG_PREMIUM
 	g.render(lcd)
-	for line in [["ALL PETS", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["A NEXT  B BUY", Game.ICON_Y]]:
+	for line in [["ALL PETS", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["NEXT  BUY", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
 		shown = shown and (not clean.buf[i] or lcd.buf[i])
-	check(shown, "страница PREMIUM: состав и B BUY")
+	check(shown, "страница PREMIUM: состав и BUY")
 	var before := g.profile.pills
 	g.press_b()
 	check(g.profile.premium and Shop.is_unlocked(g.profile, Sprites.PETS.cat) and g.profile.pills == before + 50
@@ -1069,7 +1069,7 @@ func test_new_game() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	for line in [["NEW GAME", 15], ["YOU WILL LEAVE", 44], ["YOUR PET", 53], ["B CONFIRM", Game.ICON_Y]]:
+	for line in [["NEW GAME", 15], ["YOU WILL LEAVE", 44], ["YOUR PET", 53], ["CONFIRM", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():

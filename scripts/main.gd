@@ -1,18 +1,14 @@
 extends Control
-## Корпус: экран, три кнопки, касания ЖК, клавиатура, игровой цикл и автосохранение (≙ app.py + main.py).
+## Экран во весь телефон: касания, «назад» Android, клавиатура, игровой цикл и автосохранение (≙ app.py + main.py).
 ## Отладка: godot --path . -- --speed 60 | --grow 3600;
 ## «покупки» (только debug): 1/G/П — ролик = шприц, 2 — пачка, 3 — Premium, 4 — показанный питомец, 5 — ролик = зонтик, 6 — ролик = таблетка.
 
-const SHELL := Color("#f2b8c6")
-const BEZEL := Color("#4a4458")
-const BUTTON := Color("#f5d45c")
-const BUTTON_PRESSED := Color("#d9b53a")
 const AUTOSAVE_SEC := 60.0
-const BUTTON_VIBRATE_MS := 25  # короткий отклик кнопки A/B/C
+const TAP_VIBRATE_MS := 25  # короткий отклик на касание экрана
 
 const DEBUG_PURCHASES := {"1": Shop.AD_REWARD, "g": Shop.AD_REWARD, "п": Shop.AD_REWARD,
 		"2": Shop.SYRINGE_PACK, "3": Shop.PREMIUM, "4": "pet", "5": Shop.AD_UMBRELLA, "6": Shop.AD_PILL}
-## Латиница и та же клавиша в русской раскладке, плюс стрелки/Enter/Esc.
+## Клавиатура на ПК: A — дальше, B — выполнить, C — назад. Латиница и та же клавиша в русской раскладке, плюс стрелки/Enter/Esc.
 const KEYS := {"a": "a", "ф": "a", "b": "b", "и": "b", "c": "c", "с": "c"}
 const KEYCODES := {KEY_LEFT: "a", KEY_ENTER: "b", KEY_KP_ENTER: "b", KEY_ESCAPE: "c", KEY_RIGHT: "c"}
 
@@ -49,6 +45,7 @@ func _ready() -> void:
 			settings.notify_asked = true
 			Storage.save_settings(settings)
 
+	get_tree().quit_on_go_back = false  # «назад» обрабатываем сами: это C, выход — только из пустой комнаты
 	_build_ui()
 	_add_timer(Game.TICK_SEC, _on_tick)
 	_add_timer(AUTOSAVE_SEC, _save)
@@ -66,51 +63,15 @@ func _parse_args() -> Dictionary:
 
 
 func _build_ui() -> void:
-	# Корпус масштабируется от ширины экрана (база — окно ПК 540 px): на телефоне 1440 px кнопки иначе крошечные.
-	var k := maxf(1.0, get_viewport_rect().size.x / 540.0)
 	var bg := ColorRect.new()
-	bg.color = SHELL
+	bg.color = Palette.TABLE[Palette.PAPER]
 	bg.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(bg)
-	var box := VBoxContainer.new()
-	box.set_anchors_and_offsets_preset(PRESET_FULL_RECT, PRESET_MODE_MINSIZE, roundi(16 * k))
-	box.add_theme_constant_override("separation", roundi(12 * k))
-	add_child(box)
 	lcd = Lcd.new()
-	lcd.size_flags_vertical = SIZE_EXPAND_FILL
-	lcd.tapped.connect(func(cell: Vector2i): game.tap(cell.x, cell.y); _press(""))
+	lcd.set_anchors_preset(PRESET_FULL_RECT)
+	lcd.tapped.connect(func(cell: Vector2i): Input.vibrate_handheld(TAP_VIBRATE_MS); game.tap(cell.x, cell.y); _press(""))
 	lcd.swiped.connect(func(dir: int): game.swipe(dir); _press(""))
-	box.add_child(lcd)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", roundi(40 * k))
-	box.add_child(row)
-	for key in ["a", "b", "c"]:
-		row.add_child(_make_button(key, k))
-
-
-func _make_button(key: String, k: float) -> Control:
-	var col := VBoxContainer.new()
-	var b := Button.new()
-	b.custom_minimum_size = Vector2.ONE * roundi(72 * k)
-	b.focus_mode = FOCUS_NONE
-	for st in ["normal", "hover", "pressed", "disabled"]:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = BUTTON_PRESSED if st == "pressed" else BUTTON
-		sb.set_corner_radius_all(roundi(36 * k))
-		sb.set_border_width_all(roundi(3 * k))
-		sb.border_color = BEZEL
-		b.add_theme_stylebox_override(st, sb)
-	b.button_down.connect(Input.vibrate_handheld.bind(BUTTON_VIBRATE_MS))  # «щелчок» в момент касания
-	b.pressed.connect(_press.bind("press_" + key))  # срабатывает при отпускании
-	col.add_child(b)
-	var label := Label.new()
-	label.text = key.to_upper()
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_color_override("font_color", BEZEL)
-	label.add_theme_font_size_override("font_size", roundi(22 * k))
-	col.add_child(label)
-	return col
+	add_child(lcd)
 
 
 func _add_timer(sec: float, callback: Callable) -> void:
@@ -180,7 +141,13 @@ func _save() -> void:
 func _notification(what: int) -> void:
 	if not game:
 		return
-	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST]:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:  # «назад» Android = C; из пустой комнаты — выход
+		if game.mode == "idle" and game.selected < 0:
+			_leave()
+			get_tree().quit()
+		else:
+			_press("press_c")
+	elif what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST]:
 		_leave()
 	elif what in [NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN]:
 		_come_back()

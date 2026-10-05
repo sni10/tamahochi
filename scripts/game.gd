@@ -855,16 +855,14 @@ func _draw_select(lcd: Lcd) -> void:
 	lcd.blit(Sprites.ARROW_LEFT, 4, arrow_y)
 	lcd.blit(Sprites.ARROW_RIGHT, COLS - 4 - Sprites.ARROW_RIGHT.w, arrow_y)
 	lcd.pen = Palette.INK
-	# Подсказка на месте меню: A ◀   B   ▶ C
+	# Подсказка на месте меню: ◀   OK   ▶
 	var hint_y := ICON_Y + 3
-	draw_text(lcd, "A", hint_y, ICON_X + 2)
-	lcd.blit(Sprites.ARROW_LEFT, ICON_X + 8, hint_y)
+	lcd.blit(Sprites.ARROW_LEFT, ICON_X + 4, hint_y)
 	_hit(Rect2i(ICON_X, hint_y - 2, 14, 9), press_a)
 	if unlocked:
-		draw_text(lcd, "B", hint_y)
-		_hit(Rect2i((COLS - 8) / 2, hint_y - 2, 8, 9), press_b)
-	lcd.blit(Sprites.ARROW_RIGHT, COLS - ICON_X - 12, hint_y)
-	draw_text(lcd, "C", hint_y, COLS - ICON_X - 6)
+		draw_text(lcd, "OK", hint_y)
+		_hit(Rect2i((COLS - 12) / 2, hint_y - 2, 12, 9), press_b)
+	lcd.blit(Sprites.ARROW_RIGHT, COLS - ICON_X - 8, hint_y)
 	_hit(Rect2i(COLS - ICON_X - 14, hint_y - 2, 14, 9), press_c)
 
 
@@ -923,8 +921,8 @@ func _draw_settings(lcd: Lcd) -> void:
 	var now := Decay.local_time(state.clock)
 	draw_text(lcd, settings_note if settings_note else "NOW %02d:%02d" % [now.hour, now.minute], 120)
 	var action: String = ["+1", "+1", "SET", "OPEN"][settings_field]
-	_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B " + action, press_b]])
-	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+	_hints(lcd, ICON_Y, [["NEXT", press_a], [action, press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 
 
 # --- экран разрешения на уведомления ---
@@ -934,7 +932,7 @@ func _draw_notify_ask(lcd: Lcd) -> void:
 	var lines := ["I WILL CALL YOU", "WHEN I NEED YOU", "", "PLEASE ALLOW", "NOTIFICATIONS"]
 	for i in lines.size():
 		draw_text(lcd, lines[i], 50 + i * 10)
-	_hints(lcd, ICON_Y + 3, [["B OK", press_b]])
+	_hints(lcd, ICON_Y + 3, [["OK", press_b]])
 	_hit(Rect2i(0, 0, COLS, ROWS), press_b)  # тап в любом месте — OK
 
 
@@ -961,8 +959,8 @@ func _draw_about(lcd: Lcd) -> void:
 	var lines := ["PIXEL PET", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
 	for i in lines.size():
 		draw_text(lcd, lines[i], 48 + i * 11)
-	_hints(lcd, ICON_Y, [["B FEEDBACK", press_b]])
-	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+	_hints(lcd, ICON_Y, [["FEEDBACK", press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 
 
 # --- экран «новая игра» ---
@@ -976,8 +974,8 @@ func _draw_abandon(lcd: Lcd) -> void:
 	lcd.blit(sad, _center_for(sad.w), 112 - sad.h)
 	lcd.pen = Palette.INK
 	lcd.fill = 0
-	_hints(lcd, ICON_Y, [["B CONFIRM", press_b]])
-	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+	_hints(lcd, ICON_Y, [["CONFIRM", press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 
 
 # --- экран сумки ---
@@ -998,8 +996,8 @@ func _draw_bag(lcd: Lcd) -> void:
 		var lines := ["ALL PETS", "%d PILLS" % Shop.PREMIUM_PILLS, "%d SYRINGES" % Shop.PREMIUM_SYRINGES, "%d UMBRELLAS" % Shop.PREMIUM_UMBRELLAS]
 		for i in lines.size():
 			draw_text(lcd, lines[i], 95 + i * 8)
-		_hints(lcd, ICON_Y, [["OWNED", null]] if profile.premium else [["A NEXT", press_a], ["B BUY", press_b]])
-		_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+		_hints(lcd, ICON_Y, [["OWNED", null]] if profile.premium else [["NEXT", press_a], ["BUY", press_b]])
+		_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 		return
 	if bag_item == PILL:
 		draw_text(lcd, "FREE %d/%d  X%d" % [pills_left(), FREE_PILLS_PER_DAY, profile.pills], 96)
@@ -1018,11 +1016,11 @@ func _draw_bag(lcd: Lcd) -> void:
 					lcd.blit(Sprites.ARROW_RIGHT, 14, 107 + i * 8)
 				draw_text(lcd, labels[i], 107 + i * 8, 20)
 				_hit(Rect2i(0, 106 + i * 8, COLS, 8), _tap_action.bind(i))
-			_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B OK", press_b]])
+			_hints(lcd, ICON_Y, [["NEXT", press_a], ["OK", press_b]])
 		else:
-			_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B MENU", press_b]])
-		_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+			_hints(lcd, ICON_Y, [["NEXT", press_a], ["MENU", press_b]])
+		_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 		return
 	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT, BAG_NEW] else "SET"
-	_hints(lcd, ICON_Y, [["A NEXT", press_a], ["B " + action, press_b]])
-	_hints(lcd, ICON_Y + 9, [["C BACK", press_c]])
+	_hints(lcd, ICON_Y, [["NEXT", press_a], [action, press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
