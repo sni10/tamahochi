@@ -74,7 +74,7 @@ func test_sprite_loader() -> void:
 			Sprites.ICON_SETTINGS, Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.MINI_FEVER, Sprites.SICK,
 			Sprites.LOCK, Sprites.MINI_SATIETY, Sprites.MINI_HAPPINESS, Sprites.MINI_ENERGY, Sprites.MINI_HEALTH,
 			Sprites.ARROW_LEFT, Sprites.ARROW_RIGHT, Sprites.SUN[0], Sprites.SUN[1], Sprites.CLOUD,
-			Sprites.CLOUD_MASK, Sprites.FOOD, Sprites.POOP, Sprites.STINK, Sprites.WAVE, Sprites.WAVE_FOAM, Sprites.Z_BIG,
+			Sprites.CLOUD_MASK, Sprites.FOOD, Sprites.POOP, Sprites.STINK, Sprites.WAVE, Sprites.Z_BIG,
 			Sprites.Z_SMALL, Sprites.GHOST, Sprites.BIRTH.egg[1], Sprites.BIRTH.basket[1], Sprites.FONT["+"]]:
 		check(s != null, "константа спрайта загружена")
 	check(Sprites.ICON_SIZE == 12, "ICON_SIZE")
@@ -1300,10 +1300,13 @@ func test_clean_wave() -> void:
 	check(poop_seen[0] and not poop_seen[-1], "кучка видна в начале и смыта к концу: %s" % [poop_seen])
 	g.mode_ticks = 2
 	g.render(lcd)
-	var row := g._wave_front() - Sprites.WAVE.h  # верхняя строка гребня — сплошная линия на всю ширину
+	var top := g._wave_front() - Sprites.WAVE.h  # в каждом столбце есть пиксель волны
 	var solid := true
 	for x in Lcd.COLS:
-		solid = solid and lcd.get_px(x, row)
-	check(solid, "гребень на всю ширину комнаты")
+		var hit := false
+		for y in range(top, top + Sprites.WAVE.h):
+			hit = hit or lcd.get_px(x, y)
+		solid = solid and hit
+	check(solid, "волна на всю ширину комнаты")
 	lcd.free()
 	bare.free()

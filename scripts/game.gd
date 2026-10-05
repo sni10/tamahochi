@@ -718,28 +718,16 @@ func _wave_front() -> int:
 
 
 func _draw_clean(lcd: Lcd) -> void:
-	# Гребень на всю ширину спускается сверху вниз, накрывает питомца и смывает кучки у пола.
+	# Волнистая линия на всю ширину спускается сверху вниз, накрывает питомца и смывает кучки у пола.
 	var wave := Sprites.WAVE
-	var front := _wave_front()
-	var top := front - wave.h
+	var top := _wave_front() - wave.h
 	_draw_pet(lcd, _home_x() if state.sleeping else pet_x)
-	if front < GROUND - Sprites.POOP.h + 2:
+	if top + wave.h < GROUND - Sprites.POOP.h + 2:
 		_draw_poops(lcd, cleaning_poops)
-	# След воды над гребнем: рябь редеет кверху и переливается от кадра к кадру.
-	for y in range(PLAY_Y, top):
-		var d := top - y
-		var step := 2 if d <= 3 else 4 if d <= 8 else 8 if d <= 16 else 0
-		if step:
-			for x in COLS:
-				if (x + 2 * y + frame) % step == 0:
-					lcd.set_px(x, y)
-	lcd.erase_rect(0, top, COLS, wave.h)  # под гребнем питомца не видно
-	var shift := wave.w / 2 if frame % 2 else 0  # гребень «катится» вбок
+	lcd.erase_rect(0, top, COLS, wave.h)  # под волной питомца не видно
+	var shift := wave.w / 2 if frame % 2 else 0  # волна «катится» вбок
 	for x in range(-shift, COLS, wave.w):
 		lcd.blit(wave, x, top, false, PLAY_AREA)
-	var foam := Sprites.WAVE_FOAM
-	for x in range(0, COLS, foam.w):
-		lcd.blit(foam, x, front + 1, frame % 2 == 1, PLAY_AREA)
 
 
 func _draw_dead(lcd: Lcd) -> void:

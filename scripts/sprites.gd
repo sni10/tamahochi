@@ -51,7 +51,6 @@ static var FOOD: Sprite
 static var POOP: Sprite
 static var STINK: Sprite
 static var WAVE: Sprite
-static var WAVE_FOAM: Sprite
 static var Z_BIG: Sprite
 static var Z_SMALL: Sprite
 static var GHOST: Sprite
@@ -313,7 +312,6 @@ static func _static_init() -> void:
 	POOP = _require(world, "poop", "world.txt")
 	STINK = _require(world, "stink", "world.txt")
 	WAVE = _require(world, "wave", "world.txt")
-	WAVE_FOAM = _require(world, "wave_foam", "world.txt")
 	Z_BIG = _require(world, "z_big", "world.txt")
 	Z_SMALL = _require(world, "z_small", "world.txt")
 	GHOST = _require(world, "ghost", "world.txt")
