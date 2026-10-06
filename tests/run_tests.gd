@@ -47,6 +47,7 @@ func _initialize() -> void:
 	test_umbrella_manual()
 	test_touch()
 	test_clean_wave()
+	test_colour_items()
 	print("passed %d, failed %d" % [passed, failed])
 	quit(1 if failed else 0)
 
@@ -389,7 +390,7 @@ func test_calls() -> void:
 
 func _corner(lcd: Lcd) -> PackedByteArray:
 	var out := PackedByteArray()
-	for y in range(Game.PLAY_Y + 1, Game.PLAY_Y + 9):
+	for y in range(Game.PLAY_Y + 1, Game.RAIN_CLOUD_Y):  # надпись и строка над ней
 		for x in 40:
 			out.append(1 if lcd.get_px(x, y) else 0)
 	return out
@@ -558,15 +559,14 @@ func test_rain_sky() -> void:
 	var sun_ray := 40 * Lcd.COLS + 58  # верхний луч солнца (sun1, строка 1, столбец 11)
 	check(_render(sunny, 0)[sun_ray] == 1 and _render(g, 0)[sun_ray] == 0, "в дождь солнца нет")
 	check(_render(g, 0) != _render(g, 1), "капли анимируются по тикам")
-	var cloud_x := Lcd.COLS - Sprites.RAIN_CLOUD.w - 1
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.frame = 0
 	g.render(lcd)
 	g.draw_text(clean, "AGE 3", Game.PLAY_Y + 2, 2)
 	var same := true
-	for y in range(Game.PLAY_Y + 1, Game.PLAY_Y + 9):
-		for x in cloud_x:
+	for y in range(Game.PLAY_Y + 1, Game.RAIN_CLOUD_Y):  # надпись и строки вокруг, до тучи
+		for x in Lcd.COLS:
 			same = same and lcd.get_px(x, y) == clean.get_px(x, y)
 	check(same, "в дождь AGE 3 видна целиком")
 	g.state.age = 999 * 86400
@@ -584,10 +584,13 @@ func test_rain_sky() -> void:
 	for i in (Game.SEPARATOR_TOP + 1) * Lcd.COLS:
 		panel_clean = panel_clean and int(lcd.buf[i] != 0) == sunny_buf[i]
 	check(panel_clean, "туча и капли не заходят на панель шкал")
-	var low_same := true
-	for i in range(Game.RAIN_BOTTOM * Lcd.COLS, Game.GROUND * Lcd.COLS):
-		low_same = low_same and int(lcd.buf[i] != 0) == sunny_buf[i]
-	check(low_same, "капли не долетают до питомца")
+	var drop := Palette.index("u")
+	var floor_wet := false
+	for x in Lcd.COLS:  # у пола (ниже макушки самого высокого питомца) есть капли
+		for y in range(Game.GROUND - 6, Game.GROUND):
+			floor_wet = floor_wet or lcd.buf[y * Lcd.COLS + x] == drop
+	check(floor_wet, "капли долетают до пола")
+	check(Sprites.RAIN_CLOUD.w == Lcd.COLS, "туча на всю ширину")
 	lcd.free()
 	clean.free()
 	Weather.enabled = false
@@ -685,10 +688,44 @@ func test_umbrella_screens() -> void:
 		for x in Lcd.COLS:
 			differs = differs or covered[y * Lcd.COLS + x] != bare[y * Lcd.COLS + x]
 	check(differs, "в дождь с раскрытым зонтиком над питомцем появляется зонтик")
-	var below_same := true
-	for i in range(head_y * Lcd.COLS, Game.GROUND * Lcd.COLS):
-		below_same = below_same and covered[i] == bare[i]
-	check(below_same, "зонтик не задевает самого питомца")
+	# под куполом до пола капель нет, без зонтика там капли есть; питомец виден целиком в каждом режиме
+	var drop := Palette.index("u")
+	var u := Sprites.UMBRELLA
+	var strip := Rect2i(g._home_x() + (lk.w - u.w) / 2, head_y - u.h - 1, u.w, Game.GROUND - (head_y - u.h - 1))
+	var dry := true
+	var wet_bare := false
+	var raw := Lcd.new()
+	var raw_bare := Lcd.new()
+	g.frame = 0
+	g.render(raw)
+	g.state.rain_cover = "none"
+	g.render(raw_bare)
+	g.state.rain_cover = "umbrella"
+	for y in range(strip.position.y, strip.end.y):
+		for x in range(strip.position.x, strip.end.x):
+			dry = dry and raw.buf[y * Lcd.COLS + x] != drop
+			wet_bare = wet_bare or raw_bare.buf[y * Lcd.COLS + x] == drop
+	check(dry and wet_bare, "под зонтиком сухо до пола (без зонтика там капли)")
+	var sun_clock := _at(rd[0], 3)
+	for m in ["idle", "eat", "play", "no"]:
+		var wet := Lcd.new()
+		var sun := Lcd.new()
+		g.mode = m
+		g.mode_ticks = 1
+		g.render(wet)
+		var rain_clock := g.state.clock
+		g.state.clock = sun_clock
+		g.render(sun)
+		g.state.clock = rain_clock
+		var whole := true
+		for i in range(head_y * Lcd.COLS, Game.GROUND * Lcd.COLS):
+			whole = whole and (sun.buf[i] == 0 or wet.buf[i] == sun.buf[i])
+		check(whole, "в дождь под зонтиком питомец виден целиком: " + m)
+		wet.free()
+		sun.free()
+	g.mode = "idle"
+	raw.free()
+	raw_bare.free()
 	g.state.clock = _at(rd[0], 3)  # солнце: зонтик не рисуется, даже если поле не сброшено
 	check(_render(g, 0) == _render(Game.new(_pet_at(_at(rd[0], 3))), 0), "без дождя зонтика нет")
 	Weather.enabled = false
@@ -1310,5 +1347,58 @@ func test_clean_wave() -> void:
 			hit = hit or lcd.get_px(x, y)
 		solid = solid and hit
 	check(solid, "волна на всю ширину комнаты")
+	g.mode_ticks = 0  # волна ещё под потолком — питомец виден без неё
+	lcd.clear()
+	g.render(lcd)
+	var pet_top := Game.GROUND - g.look().h
+	var before := lcd.buf.slice(pet_top * Lcd.COLS, Game.GROUND * Lcd.COLS)
+	g.mode_ticks = 4
+	check(g._wave_front() > pet_top, "на 4-м тике волна внутри питомца")
+	lcd.clear()
+	g.render(lcd)
+	var kept := true
+	var after := lcd.buf.slice(pet_top * Lcd.COLS, Game.GROUND * Lcd.COLS)
+	for i in before.size():
+		kept = kept and (before[i] == 0 or after[i] == before[i])
+	check(kept, "волна идёт за питомцем: его пиксели не стёрты")
 	lcd.free()
 	bare.free()
+
+
+func test_colour_items() -> void:
+	var s := _adult()
+	s.poops = 1
+	var g := Game.new(s)
+	var lcd := Lcd.new()
+	g.render(lcd)
+	var x0 := g._poop_x(0)
+	var y0 := Game.GROUND - Sprites.POOP.h
+	var tones := {}
+	for y in Sprites.POOP.h:
+		for x in Sprites.POOP.w:
+			tones[lcd.buf[(y0 + y) * Lcd.COLS + x0 + x]] = true
+	check(tones.has(Palette.index("t")) and tones.has(Palette.index("b")), "кучка в два тона коричневого: %s" % [tones.keys()])
+	var inner := 0  # прозрачных пикселей внутри контура кучки нет — небо не просвечивает
+	Sprites.POOP.find_inner()
+	for row in Sprites.POOP.inner:
+		for v in row:
+			inner += v
+	check(inner == 0, "внутри кучки нет прозрачных пикселей")
+	var food := {}
+	for row in Sprites.FOOD.rows:
+		for v in row:
+			food[v] = true
+	check(food.has(Palette.index("w")) and food.has(Palette.index("p")) and not food.has(Palette.PEN), "тортик бело-розовый")
+	var want := [["r", "g"], ["o", "k"], ["y", "k"], ["u"], ["b"]]  # еда, игра, сон, уборка, сумка
+	var icons := g._icons()
+	for i in icons.size():
+		var x := Game.ICON_X + i * Game.ICON_STEP
+		var seen := {}
+		for y in Sprites.ICON_SIZE:
+			for dx in Sprites.ICON_SIZE:
+				seen[lcd.buf[(Game.ICON_Y + y) * Lcd.COLS + x + dx]] = true
+		var ok := true
+		for c in want[i]:
+			ok = ok and seen.has(Palette.index(c))
+		check(ok, "иконка меню %d цветная: %s" % [i, want[i]])
+	lcd.free()

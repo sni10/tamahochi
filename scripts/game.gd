@@ -22,8 +22,7 @@ const POOP_SLOT := 11               # кучки выстраиваются сп
 const SUN_X := 47
 const SUN_Y := PLAY_Y + 2
 const CLOUD_Y := PLAY_Y + 10        # на высоте солнца, чтобы проплывать перед ним
-const RAIN_CLOUD_Y := PLAY_Y + 3  # ниже — широкая часть тучи ушла бы на надпись AGE 999
-const RAIN_BOTTOM := GROUND - Sprites.PET_MAX - 2  # капли не долетают до питомца
+const RAIN_CLOUD_Y := PLAY_Y + 8  # сразу под надписью AGE (шрифт 5 точек с PLAY_Y + 2)
 
 # Меню
 const SEPARATOR_BOTTOM := 132
@@ -635,18 +634,17 @@ func _draw_scene(lcd: Lcd, sc: Sprites.Scene) -> void:
 			lcd.blit_bg(sc.fall, x, y, false, Palette.WHITE, PLAY_AREA)
 
 
-## Туча у правого края (левее — надпись возраста), капли — под тучей и выше питомца,
-## чтобы не сливаться с ним (пиксели на ЖК складываются).
+## Туча на всю ширину под надписью возраста, капли — от тучи до пола;
+## питомец, кучки и предметы рисуются позже — поверх капель.
 func _draw_rain(lcd: Lcd) -> void:
 	var cloud := Sprites.RAIN_CLOUD
-	var cloud_x := COLS - cloud.w - 1
 	lcd.pen = Palette.index("d")
-	lcd.blit(cloud, cloud_x, RAIN_CLOUD_Y)
+	lcd.blit(cloud, (COLS - cloud.w) / 2, RAIN_CLOUD_Y)
 	lcd.pen = Palette.index("u")
 	var drop: Sprites.Sprite = Sprites.RAIN[frame % 2]
-	var rain_area := Rect2i(cloud_x, 0, cloud.w, RAIN_BOTTOM)
-	for y in range(RAIN_CLOUD_Y + cloud.h, RAIN_BOTTOM, drop.h):
-		for x in range(cloud_x + 2, cloud_x + cloud.w, drop.w):
+	var rain_area := Rect2i(0, 0, COLS, GROUND)
+	for y in range(RAIN_CLOUD_Y + cloud.h, GROUND, drop.h):
+		for x in range(2, COLS, drop.w):
 			lcd.blit(drop, x, y, false, rain_area)
 
 
@@ -675,7 +673,6 @@ func _poop_x(i: int) -> int:
 func _draw_poops(lcd: Lcd, count: int) -> void:
 	for i in count:
 		var x := _poop_x(i)
-		lcd.pen = Palette.index("b")
 		lcd.blit(Sprites.POOP, x, GROUND - Sprites.POOP.h)
 		lcd.pen = Palette.index("g")
 		lcd.blit(Sprites.STINK, x + 3, GROUND - Sprites.POOP.h - 7, (frame + i) % 2 == 1)
@@ -707,13 +704,13 @@ func _draw_pet(lcd: Lcd, x: int) -> void:
 		lcd.blit(Sprites.SICK, x + lk.w - 3, y - Sprites.SICK.h - 2)
 
 
-## Зонтик над питомцем, пока он раскрыт на текущий дождь.
+## Зонтик над питомцем, пока он раскрыт на текущий дождь; гасит капли до пола, поэтому — до питомца.
 func _draw_umbrella(lcd: Lcd, x: int, y: int, w: int) -> void:
 	if state.rain_cover == "umbrella" and Weather.is_rain(state.clock):
 		var u := Sprites.UMBRELLA
 		var ux := x + (w - u.w) / 2
 		var uy := y - u.h - 1
-		lcd.erase_rect(ux, uy, u.w, y - uy)  # зонтик закрывает капли — под ним сухо
+		lcd.erase_rect(ux, uy, u.w, GROUND - uy)  # под куполом до пола сухо — рисовать до питомца
 		var pen := lcd.pen
 		var fill := lcd.fill
 		lcd.pen = Palette.index("r")
@@ -753,11 +750,10 @@ func _draw_eat(lcd: Lcd) -> void:
 	var food_x := mini(44, poop_left - Sprites.FOOD.w - 1)
 	var lk := look()
 	var x := maxi(0, food_x - lk.w - 2)
-	lcd.blit(lk.eat[mode_ticks % 2], x, _y_for(lk.h))
 	_draw_umbrella(lcd, x, _y_for(lk.h), lk.w)
+	lcd.blit(lk.eat[mode_ticks % 2], x, _y_for(lk.h))
 	var bites := mode_ticks / 2
 	if bites < 4:
-		lcd.pen = Palette.index("r")
 		lcd.fill = 0
 		var food := Sprites.FOOD.cropped(Sprites.FOOD.w - bites * 3)
 		lcd.blit(food, food_x, GROUND - food.h)
@@ -765,14 +761,14 @@ func _draw_eat(lcd: Lcd) -> void:
 
 func _draw_play(lcd: Lcd) -> void:
 	var jump := 8 if mode_ticks % 2 else 0
-	lcd.blit(look().happy, _home_x(), _y_for(look().h) - jump, false, PLAY_AREA)
 	_draw_umbrella(lcd, _home_x(), _y_for(look().h) - jump, look().w)
+	lcd.blit(look().happy, _home_x(), _y_for(look().h) - jump, false, PLAY_AREA)
 
 
 func _draw_no(lcd: Lcd) -> void:
 	var shake := 2 if mode_ticks % 2 else -2
-	lcd.blit(look().sad[0], maxi(0, _home_x() + shake), _y_for(look().h))
 	_draw_umbrella(lcd, maxi(0, _home_x() + shake), _y_for(look().h), look().w)
+	lcd.blit(look().sad[0], maxi(0, _home_x() + shake), _y_for(look().h))
 
 
 ## Нижний край волны уборки: за анимацию спускается от верха комнаты до пола.
@@ -781,18 +777,21 @@ func _wave_front() -> int:
 
 
 func _draw_clean(lcd: Lcd) -> void:
-	# Волнистая линия на всю ширину спускается сверху вниз, накрывает питомца и смывает кучки у пола.
+	# Волнистая линия на всю ширину спускается сверху вниз за питомцем и смывает кучки у пола.
 	var wave := Sprites.WAVE
 	var top := _wave_front() - wave.h
-	_draw_pet(lcd, _home_x() if state.sleeping else pet_x)
-	if top + wave.h < GROUND - Sprites.POOP.h + 2:
-		_draw_poops(lcd, cleaning_poops)
-	lcd.erase_rect(0, top, COLS, wave.h)  # под волной питомца не видно
+	var pen := lcd.pen
+	var fill := lcd.fill
 	lcd.pen = Palette.index("u")
 	lcd.fill = 0
 	var shift := wave.w / 2 if frame % 2 else 0  # волна «катится» вбок
 	for x in range(-shift, COLS, wave.w):
 		lcd.blit(wave, x, top, false, PLAY_AREA)
+	lcd.pen = pen
+	lcd.fill = fill
+	_draw_pet(lcd, _home_x() if state.sleeping else pet_x)
+	if top + wave.h < GROUND - Sprites.POOP.h + 2:
+		_draw_poops(lcd, cleaning_poops)
 
 
 func _draw_dead(lcd: Lcd) -> void:
