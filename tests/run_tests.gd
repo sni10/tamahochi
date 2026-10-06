@@ -93,8 +93,8 @@ func test_lcd() -> void:
 	lcd.blit(sp, 0, 0, true)
 	check(not lcd.get_px(0, 0) and lcd.get_px(1, 0), "отражение")
 	lcd.clear()
-	lcd.blit(sp, 10, 36, false, Game.PLAY_AREA)
-	check(not lcd.get_px(10, 36) and lcd.get_px(10, 37), "отсечение по PLAY_AREA")
+	lcd.blit(sp, 10, Game.PLAY_Y - 1, false, Game.PLAY_AREA)
+	check(not lcd.get_px(10, Game.PLAY_Y - 1) and lcd.get_px(10, Game.PLAY_Y), "отсечение по PLAY_AREA")
 	lcd.clear()
 	lcd.blit(sp, 0, 0, false, Rect2i(0, 0, 72, 156), 2)
 	check(lcd.get_px(1, 1) and not lcd.get_px(2, 0) and lcd.get_px(3, 3), "scale 2")
@@ -556,7 +556,7 @@ func test_rain_sky() -> void:
 	var sunny := Game.new(_pet_at(_at(rd[0], 3)))  # 03:00 — дождей не бывает
 	sunny.settings.quiet_start = 0  # без тихих часов: иначе в 03:00 ночь и луна вместо солнца
 	sunny.settings.quiet_end = 0
-	var sun_ray := 40 * Lcd.COLS + 58  # верхний луч солнца (sun1, строка 1, столбец 11)
+	var sun_ray := (40 + Game.TOP) * Lcd.COLS + 58  # верхний луч солнца (sun1, строка 1, столбец 11)
 	check(_render(sunny, 0)[sun_ray] == 1 and _render(g, 0)[sun_ray] == 0, "в дождь солнца нет")
 	check(_render(g, 0) != _render(g, 1), "капли анимируются по тикам")
 	var lcd := Lcd.new()
@@ -581,7 +581,7 @@ func test_rain_sky() -> void:
 	check(same, "в дождь AGE 999 не задевает тучу")
 	var panel_clean := true
 	var sunny_buf := _render(sunny, 0)
-	for i in (Game.SEPARATOR_TOP + 1) * Lcd.COLS:
+	for i in range(Game.TOP * Lcd.COLS, (Game.SEPARATOR_TOP + 1) * Lcd.COLS):  # без строки часов: время у питомцев разное
 		panel_clean = panel_clean and int(lcd.buf[i] != 0) == sunny_buf[i]
 	check(panel_clean, "туча и капли не заходят на панель шкал")
 	var drop := Palette.index("u")
@@ -736,10 +736,10 @@ func test_umbrella_screens() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	g.draw_text(clean, "UMBRELLA", 84)
-	g.draw_text(clean, "X 3", 96)
+	g.draw_text(clean, "UMBRELLA", 84 + Game.TOP)
+	g.draw_text(clean, "X 3", 96 + Game.TOP)
 	var shown := true
-	for y in range(84, 101):
+	for y in range(84 + Game.TOP, 101 + Game.TOP):
 		for x in Lcd.COLS:
 			shown = shown and (not clean.get_px(x, y) or lcd.get_px(x, y))
 	check(shown, "сумка: UMBRELLA и X 3")
@@ -930,8 +930,8 @@ func test_settings_calls() -> void:
 	var clean := Lcd.new()
 	g.settings_note = "NOT HERE"
 	g.render(lcd)
-	g.draw_text(clean, "NOT HERE", 120)
-	g.draw_text(clean, "CALLS OFF", 94, 8)
+	g.draw_text(clean, "NOT HERE", 120 + Game.TOP)
+	g.draw_text(clean, "CALLS OFF", 94 + Game.TOP, 8)
 	var shown := true
 	for i in clean.buf.size():
 		shown = shown and (not clean.buf[i] or lcd.buf[i])
@@ -956,7 +956,7 @@ func test_about() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	for line in [["PIXEL PET", 48], ["V 0.0.0", 59], ["MADE BY SNI10", 81], ["WITH LOVE", 92], ["TO PETS", 103], ["FEEDBACK", Game.ICON_Y]]:
+	for line in [["PIXEL PET", 48 + Game.TOP], ["V 0.0.0", 59 + Game.TOP], ["MADE BY SNI10", 81 + Game.TOP], ["WITH LOVE", 92 + Game.TOP], ["TO PETS", 103 + Game.TOP], ["FEEDBACK", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -1018,7 +1018,7 @@ func test_tester_time() -> void:
 
 func test_moon() -> void:
 	check(Sprites.MOON != null and Sprites.MOON.w == 15, "спрайт луны загружен")
-	var sun_ray := 40 * Lcd.COLS + 58  # верхний луч солнца
+	var sun_ray := (40 + Game.TOP) * Lcd.COLS + 58  # верхний луч солнца
 	var moon_px: int = (Game.SUN_Y + (Sprites.SUN[0].h - Sprites.MOON.h) / 2 + 12) * Lcd.COLS + Game.SUN_X + (Sprites.SUN[0].w - Sprites.MOON.w) / 2 + 7  # низ серпа, у солнца там пусто
 	var night := Game.new(_pet_at(_local(2)))
 	var day := Game.new(_pet_at(_local(12)))
@@ -1026,6 +1026,13 @@ func test_moon() -> void:
 	var d := _render(day, 0)
 	check(n[sun_ray] == 0 and n[moon_px] == 1, "02:00 при тихих 22–08 — луна, солнца нет")
 	check(d[sun_ray] == 1 and d[moon_px] == 0, "12:00 — солнце")
+	var clock := Lcd.new()
+	day.draw_text(clock, "12:00", Game.CLOCK_Y, 1)
+	var clock_ok := true
+	for i in Game.TOP * Lcd.COLS:
+		clock_ok = clock_ok and d[i] == int(clock.buf[i] != 0)
+	check(clock_ok, "часы питомца в левом верхнем углу: 12:00")
+	clock.free()
 
 
 # --- сумка: подменю USE / BUY / GET, ПРЕМИУМ ---
@@ -1065,7 +1072,7 @@ func test_shop_stubs() -> void:
 	g.mode = "bag"
 	g.bag_item = Game.BAG_PREMIUM
 	g.render(lcd)
-	for line in [["ALL PETS", 95], ["50 PILLS", 103], ["25 SYRINGES", 111], ["25 UMBRELLAS", 119], ["NEXT  BUY", Game.ICON_Y]]:
+	for line in [["ALL PETS", 95 + Game.TOP], ["50 PILLS", 103 + Game.TOP], ["25 SYRINGES", 111 + Game.TOP], ["25 UMBRELLAS", 119 + Game.TOP], ["NEXT  BUY", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -1106,7 +1113,7 @@ func test_new_game() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	for line in [["NEW GAME", 15], ["YOU WILL LEAVE", 44], ["YOUR PET", 53], ["CONFIRM", Game.ICON_Y]]:
+	for line in [["NEW GAME", 15 + Game.TOP], ["YOU WILL LEAVE", 44 + Game.TOP], ["YOUR PET", 53 + Game.TOP], ["CONFIRM", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -1230,25 +1237,25 @@ func test_touch() -> void:
 
 	# Сумка: стрелки листают, предмет — применить, запас — подменю.
 	g.bag_item = Game.PILL
-	_tap(g, lcd, 9, 60)
+	_tap(g, lcd, 9, 60 + Game.TOP)
 	check(g.bag_item == Game.BAG_PREMIUM, "левая стрелка — предыдущий предмет (по кругу, без TIME)")
-	_tap(g, lcd, 63, 60)
-	_tap(g, lcd, 63, 60)
+	_tap(g, lcd, 63, 60 + Game.TOP)
+	_tap(g, lcd, 63, 60 + Game.TOP)
 	check(g.bag_item == Game.SYRINGE, "правая стрелка — следующий предмет")
 	g.state.sick = true
 	g.state.fever = 30
 	g.profile.syringes = 1
-	_tap(g, lcd, 36, 62)
+	_tap(g, lcd, 36, 62 + Game.TOP)
 	check(g.mode == "heal" and not g.state.sick and g.profile.syringes == 0, "тап по шприцу — применить")
 	g.mode = "bag"
 	g.tester = true
-	_tap(g, lcd, 36, 98)
+	_tap(g, lcd, 36, 98 + Game.TOP)
 	check(g.bag_action == Game.ACTION_USE, "тап по запасу — подменю USE / BUY / GET")
-	_tap(g, lcd, 36, 118)
+	_tap(g, lcd, 36, 118 + Game.TOP)
 	check(g.profile.syringes == 5 and g.bag_action == Game.ACTION_BUY and g.mode == "bag", "тап по BUY — купить набор")
-	_tap(g, lcd, 36, 126)
+	_tap(g, lcd, 36, 126 + Game.TOP)
 	check(g.profile.syringes == 6, "тап по GET — +1 за рекламу")
-	_tap(g, lcd, 36, 98)
+	_tap(g, lcd, 36, 98 + Game.TOP)
 	check(g.bag_action == -1, "повторный тап по запасу закрывает подменю")
 	g.swipe(1)
 	check(g.bag_item == Game.UMBRELLA, "мазок — следующий предмет")
@@ -1266,10 +1273,10 @@ func test_touch() -> void:
 	check(a_next.size() == 1, "подсказка A NEXT — тап-зона")
 	_tap(g, lcd, 36 + 12, Game.ICON_Y + 2)
 	check(g.mode == "settings", "тап по B OPEN — настройки")
-	_tap(g, lcd, 36, 75)
+	_tap(g, lcd, 36, 75 + Game.TOP)
 	check(g.settings_field == Game.FIELD_TO and g.settings.quiet_end == (Storage.Settings.new().quiet_end + 1) % 24,
 			"тап по строке TO — выбрать и +1")
-	_tap(g, lcd, 36, 95)
+	_tap(g, lcd, 36, 95 + Game.TOP)
 	check(g.settings_field == Game.FIELD_CALLS and not g.settings.calls_enabled, "тап по CALLS — переключить")
 
 	# Выбор питомца: стороны листают, питомец — выбрать.
@@ -1287,11 +1294,11 @@ func test_touch() -> void:
 	check(sel.choice == 1, "мазок на выборе — следующий питомец")
 	lcd.free()
 
-	# Касание в координатах контрола → пиксель ЖК (пиксель 5 при размере 380×800, отступ по центру).
+	# Касание в координатах контрола → пиксель ЖК (пиксель 5 при размере 380×835, отступ по центру).
 	var screen := Lcd.new()
-	screen.size = Vector2(380, 800)
+	screen.size = Vector2(380, 835)
 	check(screen.cell_at(Vector2(10, 10)) == Vector2i(0, 0), "левый верхний пиксель: %s" % screen.cell_at(Vector2(10, 10)))
-	check(screen.cell_at(Vector2(10 + 5 * 71 + 2, 10 + 5 * 155 + 2)) == Vector2i(71, 155), "правый нижний пиксель")
+	check(screen.cell_at(Vector2(10 + 5 * 71 + 2, 10 + 5 * 162 + 2)) == Vector2i(71, 162), "правый нижний пиксель")
 	var got := []
 	screen.tapped.connect(func(c): got.append(c))
 	screen.swiped.connect(func(d): got.append(d))

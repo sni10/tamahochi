@@ -8,7 +8,7 @@ signal tapped(cell: Vector2i)
 signal swiped(dir: int)  ## +1 — палец ушёл влево (следующий), −1 — вправо (предыдущий)
 
 const COLS := 72
-const ROWS := 156
+const ROWS := 163  # 156 + строка часов питомца сверху (Game.TOP)
 
 const SWIPE_CELLS := 10  # мазок короче — это тап
 
