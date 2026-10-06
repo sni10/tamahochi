@@ -6,16 +6,20 @@ const COLS := Lcd.COLS
 const ROWS := Lcd.ROWS
 const TICK_SEC := 0.5
 
+# Часы питомца «14:55» отдельной строкой в левом верхнем углу экрана; всё остальное — ниже на TOP точек
+const CLOCK_Y := 2
+const TOP := 7
+
 # Панель шкал
-const STATUS_Y := 3
+const STATUS_Y := 3 + TOP
 const STATUS_STEP := 6
 const BAR_X := 9
 const BAR_W := 62
-const SEPARATOR_TOP := 35
+const SEPARATOR_TOP := 35 + TOP
 
 # Комната
-const PLAY_Y := 37
-const GROUND := 126                 # «пол», на котором стоят спрайты
+const PLAY_Y := 37 + TOP
+const GROUND := 126 + TOP           # «пол», на котором стоят спрайты
 const PLAY_AREA := Rect2i(0, PLAY_Y, COLS, GROUND - PLAY_Y)
 const FALL_BAND := 14  # ширина полос у краёв, где падает снег сцены
 const POOP_SLOT := 11               # кучки выстраиваются справа налево
@@ -25,8 +29,8 @@ const CLOUD_Y := PLAY_Y + 10        # на высоте солнца, чтобы
 const RAIN_CLOUD_Y := PLAY_Y + 8  # сразу под надписью AGE (шрифт 5 точек с PLAY_Y + 2)
 
 # Меню
-const SEPARATOR_BOTTOM := 132
-const ICON_Y := 139
+const SEPARATOR_BOTTOM := 132 + TOP
+const ICON_Y := 139 + TOP
 const ICON_X := 2
 const ICON_STEP := 14
 
@@ -34,8 +38,8 @@ const ICON_STEP := 14
 const TAP_SLACK := 2
 
 # Экран выбора
-const NAME_Y := 9
-const DOTS_Y := 25
+const NAME_Y := 9 + TOP
+const DOTS_Y := 25 + TOP
 
 enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
@@ -580,6 +584,8 @@ func _draw_status(lcd: Lcd) -> void:
 		[Sprites.MINI_HEALTH, s.health, s.health < SAD_THRESHOLD, "g"],
 		[Sprites.MINI_FEVER, s.fever, s.sick, "r"],
 	]
+	var now := Decay.local_time(s.clock)  # время, по которому живёт питомец
+	draw_text(lcd, "%02d:%02d" % [now.hour, now.minute], CLOCK_Y, 1)
 	var inner_w := BAR_W - 2
 	for i in bars.size():
 		var y := STATUS_Y + i * STATUS_STEP
@@ -901,9 +907,9 @@ func _hints(lcd: Lcd, y: int, parts: Array) -> void:
 
 func _draw_settings(lcd: Lcd) -> void:
 	var st := settings
-	draw_text(lcd, "SETTINGS", 15)
-	draw_text(lcd, "QUIET HOURS", 42)
-	var rows := [["FROM", st.quiet_start, 54], ["TO", st.quiet_end, 72]]
+	draw_text(lcd, "SETTINGS", 15 + TOP)
+	draw_text(lcd, "QUIET HOURS", 42 + TOP)
+	var rows := [["FROM", st.quiet_start, 54 + TOP], ["TO", st.quiet_end, 72 + TOP]]
 	for i in rows.size():
 		var y: int = rows[i][2]
 		if i == settings_field:
@@ -911,14 +917,14 @@ func _draw_settings(lcd: Lcd) -> void:
 		draw_text(lcd, rows[i][0], y + 3, 8)
 		draw_text(lcd, "%02d:00" % rows[i][1], y, 30, 2)
 		_hit(Rect2i(0, y - 1, COLS, 12), _tap_field.bind(i))
-	var lines := [[FIELD_CALLS, "CALLS ON" if st.calls_enabled else "CALLS OFF", 94], [FIELD_SOUND, "SOUND", 104]]
+	var lines := [[FIELD_CALLS, "CALLS ON" if st.calls_enabled else "CALLS OFF", 94 + TOP], [FIELD_SOUND, "SOUND", 104 + TOP]]
 	for line in lines:
 		if line[0] == settings_field:
 			lcd.blit(Sprites.ARROW_RIGHT, 2, line[2])
 		draw_text(lcd, line[1], line[2], 8)
 		_hit(Rect2i(0, line[2] - 1, COLS, 8), _tap_field.bind(line[0]))
 	var now := Decay.local_time(state.clock)
-	draw_text(lcd, settings_note if settings_note else "NOW %02d:%02d" % [now.hour, now.minute], 120)
+	draw_text(lcd, settings_note if settings_note else "NOW %02d:%02d" % [now.hour, now.minute], 120 + TOP)
 	var action: String = ["+1", "+1", "SET", "OPEN"][settings_field]
 	_hints(lcd, ICON_Y, [["NEXT", press_a], [action, press_b]])
 	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
@@ -927,10 +933,10 @@ func _draw_settings(lcd: Lcd) -> void:
 # --- экран разрешения на уведомления ---
 
 func _draw_notify_ask(lcd: Lcd) -> void:
-	draw_text(lcd, "HELLO", 12, -1, 2)
+	draw_text(lcd, "HELLO", 12 + TOP, -1, 2)
 	var lines := ["I WILL CALL YOU", "WHEN I NEED YOU", "", "PLEASE ALLOW", "NOTIFICATIONS"]
 	for i in lines.size():
-		draw_text(lcd, lines[i], 50 + i * 10)
+		draw_text(lcd, lines[i], 50 + TOP + i * 10)
 	_hints(lcd, ICON_Y + 3, [["OK", press_b]])
 	_hit(Rect2i(0, 0, COLS, ROWS), press_b)  # тап в любом месте — OK
 
@@ -954,10 +960,10 @@ OS: %s %s" % [version(), OS.get_model_name(), OS.get_name(), OS.get_version()]
 
 
 func _draw_about(lcd: Lcd) -> void:
-	draw_text(lcd, "ABOUT", 15)
+	draw_text(lcd, "ABOUT", 15 + TOP)
 	var lines := ["PIXEL PET", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
 	for i in lines.size():
-		draw_text(lcd, lines[i], 48 + i * 11)
+		draw_text(lcd, lines[i], 48 + TOP + i * 11)
 	_hints(lcd, ICON_Y, [["FEEDBACK", press_b]])
 	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 
@@ -965,12 +971,12 @@ func _draw_about(lcd: Lcd) -> void:
 # --- экран «новая игра» ---
 
 func _draw_abandon(lcd: Lcd) -> void:
-	draw_text(lcd, "NEW GAME", 15)
-	draw_text(lcd, "YOU WILL LEAVE", 44)
-	draw_text(lcd, "YOUR PET", 53)
+	draw_text(lcd, "NEW GAME", 15 + TOP)
+	draw_text(lcd, "YOU WILL LEAVE", 44 + TOP)
+	draw_text(lcd, "YOUR PET", 53 + TOP)
 	var sad: Sprites.Sprite = look().sad[frame % 2]
 	_pet_pen(lcd)
-	lcd.blit(sad, _center_for(sad.w), 112 - sad.h)
+	lcd.blit(sad, _center_for(sad.w), 112 + TOP - sad.h)
 	lcd.pen = Palette.INK
 	lcd.fill = 0
 	_hints(lcd, ICON_Y, [["CONFIRM", press_b]])
@@ -982,39 +988,39 @@ func _draw_abandon(lcd: Lcd) -> void:
 func _draw_bag(lcd: Lcd) -> void:
 	var icon: Sprites.Sprite = _bag_icons()[bag_item]
 	var icon_x := (COLS - icon.w * 2) / 2
-	draw_text(lcd, "BAG", 15)
-	lcd.blit(icon, icon_x, 50, false, Rect2i(0, 0, COLS, ROWS), 2)
-	lcd.blit(Sprites.ARROW_LEFT, 8, 58)
-	lcd.blit(Sprites.ARROW_RIGHT, COLS - 8 - Sprites.ARROW_RIGHT.w, 58)
-	draw_text(lcd, BAG_NAMES[bag_item], 84)
+	draw_text(lcd, "BAG", 15 + TOP)
+	lcd.blit(icon, icon_x, 50 + TOP, false, Rect2i(0, 0, COLS, ROWS), 2)
+	lcd.blit(Sprites.ARROW_LEFT, 8, 58 + TOP)
+	lcd.blit(Sprites.ARROW_RIGHT, COLS - 8 - Sprites.ARROW_RIGHT.w, 58 + TOP)
+	draw_text(lcd, BAG_NAMES[bag_item], 84 + TOP)
 	# Слева и справа от предмета — листать, сам предмет (с названием) — применить / открыть.
-	_hit(Rect2i(0, 44, icon_x, 46), _bag_step.bind(-1))
-	_hit(Rect2i(icon_x, 46, icon.w * 2, 44), _tap_bag_item)
-	_hit(Rect2i(icon_x + icon.w * 2, 44, COLS - icon_x - icon.w * 2, 46), _bag_step.bind(1))
+	_hit(Rect2i(0, 44 + TOP, icon_x, 46), _bag_step.bind(-1))
+	_hit(Rect2i(icon_x, 46 + TOP, icon.w * 2, 44), _tap_bag_item)
+	_hit(Rect2i(icon_x + icon.w * 2, 44 + TOP, COLS - icon_x - icon.w * 2, 46), _bag_step.bind(1))
 	if bag_item == BAG_PREMIUM:
 		var lines := ["ALL PETS", "%d PILLS" % Shop.PREMIUM_PILLS, "%d SYRINGES" % Shop.PREMIUM_SYRINGES, "%d UMBRELLAS" % Shop.PREMIUM_UMBRELLAS]
 		for i in lines.size():
-			draw_text(lcd, lines[i], 95 + i * 8)
+			draw_text(lcd, lines[i], 95 + TOP + i * 8)
 		_hints(lcd, ICON_Y, [["OWNED", null]] if profile.premium else [["NEXT", press_a], ["BUY", press_b]])
 		_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 		return
 	if bag_item == PILL:
-		draw_text(lcd, "FREE %d/%d  X%d" % [pills_left(), FREE_PILLS_PER_DAY, profile.pills], 96)
+		draw_text(lcd, "FREE %d/%d  X%d" % [pills_left(), FREE_PILLS_PER_DAY, profile.pills], 96 + TOP)
 	elif bag_item == SYRINGE:
-		draw_text(lcd, "X %d" % profile.syringes, 96)
+		draw_text(lcd, "X %d" % profile.syringes, 96 + TOP)
 	elif bag_item == UMBRELLA:
-		draw_text(lcd, "X %d" % profile.umbrellas, 96)
+		draw_text(lcd, "X %d" % profile.umbrellas, 96 + TOP)
 	elif bag_item == BAG_TIME:
-		draw_text(lcd, "SPEED X%d" % speed, 96)
+		draw_text(lcd, "SPEED X%d" % speed, 96 + TOP)
 	if bag_item in BUY_PRODUCTS:
-		_hit(Rect2i(0, 94, COLS, 9), _tap_stock)  # запас — открыть / закрыть подменю
+		_hit(Rect2i(0, 94 + TOP, COLS, 9), _tap_stock)  # запас — открыть / закрыть подменю
 		if bag_action >= 0:  # подменю: USE / BUY Xn / GET X1 (реклама)
 			var labels := ["USE", "BUY X%d" % PACK_SIZES[bag_item], "GET X1 AD"]
 			for i in labels.size():
 				if i == bag_action:
-					lcd.blit(Sprites.ARROW_RIGHT, 14, 107 + i * 8)
-				draw_text(lcd, labels[i], 107 + i * 8, 20)
-				_hit(Rect2i(0, 106 + i * 8, COLS, 8), _tap_action.bind(i))
+					lcd.blit(Sprites.ARROW_RIGHT, 14, 107 + TOP + i * 8)
+				draw_text(lcd, labels[i], 107 + TOP + i * 8, 20)
+				_hit(Rect2i(0, 106 + TOP + i * 8, COLS, 8), _tap_action.bind(i))
 			_hints(lcd, ICON_Y, [["NEXT", press_a], ["OK", press_b]])
 		else:
 			_hints(lcd, ICON_Y, [["NEXT", press_a], ["MENU", press_b]])
