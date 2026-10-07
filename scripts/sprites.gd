@@ -28,6 +28,7 @@ static var ICON_CLEAN: Sprite
 static var ICON_SETTINGS: Sprite
 static var ICON_BAG: Sprite
 static var ICON_ABOUT: Sprite
+static var ICON_LICENSES: Sprite
 static var ICON_TIME: Sprite
 static var ICON_PREMIUM: Sprite
 static var ICON_NEW: Sprite
@@ -375,6 +376,7 @@ static func _static_init() -> void:
 	ICON_SETTINGS = _require(ui, "icon_settings", "ui.txt")
 	ICON_BAG = _require(ui, "icon_bag", "ui.txt")
 	ICON_ABOUT = _require(ui, "icon_about", "ui.txt")
+	ICON_LICENSES = _require(ui, "icon_licenses", "ui.txt")
 	ICON_TIME = _require(ui, "icon_time", "ui.txt")
 	ICON_PREMIUM = _require(ui, "icon_premium", "ui.txt")
 	ICON_NEW = _require(ui, "icon_new", "ui.txt")
