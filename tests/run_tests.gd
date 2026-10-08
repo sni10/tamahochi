@@ -38,6 +38,7 @@ func _initialize() -> void:
 	test_notify_ask()
 	test_settings_calls()
 	test_about()
+	test_licenses()
 	test_tester_time()
 	test_moon()
 	test_shop_stubs()
@@ -185,6 +186,12 @@ func test_game() -> void:
 	check(g.mode == "no" and g.state.satiety == 96, "сытый отказывается")
 	g = Game.new(_adult())
 	g.state.satiety = 50
+	g.state.sick = true
+	g.press_a()
+	g.press_b()
+	check(g.mode == "no" and g.state.satiety == 50, "больной не ест")
+	g = Game.new(_adult())
+	g.state.satiety = 50
 	g.press_a()
 	g.press_b()
 	g.press_a()
@@ -233,6 +240,10 @@ func test_game() -> void:
 	g.mode = "bag"
 	_bag_use(g)
 	check(not g.state.sick and g.state.fever == 0.0, "остаток температуры 1e-7 — тоже вылечен")
+	g.state.health = 50
+	g.mode = "bag"
+	_bag_use(g)
+	check(g.mode == "heal" and g.state.health == 60 and not g.state.sick, "таблетка раненому: +10 здоровья")
 	g.state.pills_day = "2000-01-01"
 	g.state.pills_used = 5
 	check(g.pills_left() == 5, "новый день — снова 5 таблеток")
@@ -243,8 +254,9 @@ func test_game() -> void:
 	g.mode = "bag"
 	g.profile.syringes = 2
 	g.state.satiety = 10
+	g.state.health = 20
 	_bag_use(g)
-	check(g.state.satiety == 100 and g.profile.syringes == 1 and g.profile_changed, "шприц")
+	check(g.state.satiety == 100 and g.state.health == 100 and g.profile.syringes == 1 and g.profile_changed, "шприц")
 	g.mode = "bag"
 	g.state.sick = true
 	g.state.poops = 2
@@ -305,6 +317,8 @@ func test_storage() -> void:
 	f.close()
 	var p := Storage.load_profile(path)
 	check(p.syringes == 3 and p.owned_pets == ["cat"], "профиль")
+	p = Storage.load_profile("user://nope.json")
+	check(p.syringes == 1 and p.umbrellas == 3 and p.pills == 0, "новый игрок: шприц и 3 зонтика в подарок")
 	DirAccess.remove_absolute(path)
 
 
@@ -707,7 +721,7 @@ func test_umbrella_screens() -> void:
 			wet_bare = wet_bare or raw_bare.buf[y * Lcd.COLS + x] == drop
 	check(dry and wet_bare, "под зонтиком сухо до пола (без зонтика там капли)")
 	var sun_clock := _at(rd[0], 3)
-	for m in ["idle", "eat", "play", "no"]:
+	for m in ["idle", "eat", "play", "no", "heal"]:
 		var wet := Lcd.new()
 		var sun := Lcd.new()
 		g.mode = m
@@ -956,7 +970,7 @@ func test_about() -> void:
 	var lcd := Lcd.new()
 	var clean := Lcd.new()
 	g.render(lcd)
-	for line in [["PIXEL PET", 48 + Game.TOP], ["V 0.0.0", 59 + Game.TOP], ["MADE BY SNI10", 81 + Game.TOP], ["WITH LOVE", 92 + Game.TOP], ["TO PETS", 103 + Game.TOP], ["FEEDBACK", Game.ICON_Y]]:
+	for line in [["PIXEL PET", 48 + Game.TOP], ["V 0.0.0", 59 + Game.TOP], ["MADE BY SNI10", 81 + Game.TOP], ["WITH LOVE", 92 + Game.TOP], ["TO PETS", 103 + Game.TOP], ["POWERED BY", 114 + Game.TOP], ["GODOT ENGINE", 125 + Game.TOP], ["FEEDBACK", Game.ICON_Y]]:
 		g.draw_text(clean, line[0], line[1])
 	var shown := true
 	for i in clean.buf.size():
@@ -975,6 +989,37 @@ func test_about() -> void:
 			"письмо: адрес, тема, версия в теле — %s" % mail)
 
 
+func test_licenses() -> void:
+	check(Sprites.ICON_LICENSES != null and Sprites.ICON_LICENSES.w == 12, "иконка LICENSES загружена")
+	var g := Game.new(_adult())
+	g.mode = "bag"
+	g.bag_item = Game.PILL
+	g._bag_step(-1)
+	check(g.bag_item == Game.BAG_LICENSES, "LICENSES — последний предмет сумки")
+	g.press_b()
+	check(g.mode == "license" and g.license_page == 0, "B на LICENSES — лицензия Godot")
+	var lines := Game.license_lines()
+	var joined := " ".join(lines)
+	check(joined.contains("Permission is hereby granted") and joined.contains("Godot Engine contributors"), "в лицензии текст MIT Godot")
+	check(joined.contains("FREETYPE PROJECT") and joined.contains("ENET") and joined.contains("MBED TLS") and joined.contains("Lee Salzman"), "в лицензиях FreeType, ENet, Mbed TLS с копирайтами")
+	check(Array(lines).all(func(l): return Game.text_width(l, 1) <= Lcd.COLS - 2), "строки лицензии влезают в экран")
+	check(Game.wrap_text("AB NONINFRINGEMENTNONINFRINGEMENT", 20).size() > 2, "длинное слово режется")
+	var pages := Game.license_pages()
+	check(pages > 1, "лицензия на %d страницах" % pages)
+	var page_lcd := Lcd.new()
+	for i in pages:
+		g.render(page_lcd)
+		g.press_a()
+	page_lcd.free()
+	check(g.license_page == 0, "A листает лицензию по кругу")
+	g.swipe(-1)
+	check(g.license_page == pages - 1, "свайп назад с первой — на последнюю страницу")
+	g.swipe(1)
+	check(g.license_page == 0, "свайп вперёд — следующая страница")
+	g.press_c()
+	check(g.mode == "bag" and g.bag_item == Game.BAG_LICENSES, "C с лицензии — назад в сумку на LICENSES")
+
+
 # --- TIME: ускорение времени для тестов ---
 
 func test_tester_time() -> void:
@@ -987,11 +1032,13 @@ func test_tester_time() -> void:
 	g.press_a()
 	check(g.bag_item == Game.BAG_PREMIUM, "после NEW GAME — PREMIUM")
 	g.press_a()
-	check(g.bag_item == Game.PILL, "продакшен: после PREMIUM — снова PILL, TIME нет")
-	g.tester = true
-	g.bag_item = Game.BAG_PREMIUM
+	check(g.bag_item == Game.BAG_LICENSES, "после PREMIUM — LICENSES")
 	g.press_a()
-	check(g.bag_item == Game.BAG_TIME, "тестовая сборка: после PREMIUM — TIME")
+	check(g.bag_item == Game.PILL, "продакшен: после LICENSES — снова PILL, TIME нет")
+	g.tester = true
+	g.bag_item = Game.BAG_LICENSES
+	g.press_a()
+	check(g.bag_item == Game.BAG_TIME, "тестовая сборка: после LICENSES — TIME")
 	var seen := []
 	for i in 4:
 		g.press_b()
@@ -1238,7 +1285,7 @@ func test_touch() -> void:
 	# Сумка: стрелки листают, предмет — применить, запас — подменю.
 	g.bag_item = Game.PILL
 	_tap(g, lcd, 9, 60 + Game.TOP)
-	check(g.bag_item == Game.BAG_PREMIUM, "левая стрелка — предыдущий предмет (по кругу, без TIME)")
+	check(g.bag_item == Game.BAG_LICENSES, "левая стрелка — предыдущий предмет (по кругу, без TIME)")
 	_tap(g, lcd, 63, 60 + Game.TOP)
 	_tap(g, lcd, 63, 60 + Game.TOP)
 	check(g.bag_item == Game.SYRINGE, "правая стрелка — следующий предмет")

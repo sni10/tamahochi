@@ -45,8 +45,8 @@ enum { FEED, PLAY, SLEEP, CLEAN, BAG }
 const ICON_COUNT := 5
 enum { FIELD_FROM, FIELD_TO, FIELD_CALLS, FIELD_SOUND }
 const SETTINGS_FIELDS := 4
-enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT, BAG_NEW, BAG_PREMIUM, BAG_TIME }
-const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT", "NEW GAME", "PREMIUM", "TIME"]  # TIME — только tester
+enum { PILL, SYRINGE, UMBRELLA, BAG_SETTINGS, BAG_ABOUT, BAG_NEW, BAG_PREMIUM, BAG_LICENSES, BAG_TIME }
+const BAG_NAMES := ["PILL", "SYRINGE", "UMBRELLA", "SETTINGS", "ABOUT", "NEW GAME", "PREMIUM", "LICENSES", "TIME"]  # TIME — только tester, всегда последний
 ## Подменю расходника (B на PILL/SYRINGE/UMBRELLA): применить, купить набор, получить за рекламу.
 enum { ACTION_USE, ACTION_BUY, ACTION_GET }
 const ACTION_NAMES := ["USE", "BUY", "GET"]
@@ -57,6 +57,7 @@ const TIME_SPEEDS := [1.0, 10.0, 60.0, 600.0]
 const FEEDBACK_EMAIL := "d.strelets.a@gmail.com"
 const FREE_PILLS_PER_DAY := 5
 const PILL_FEVER := 10.0
+const PILL_HEALTH := 10.0
 
 ## Длительность анимаций в тиках; пока анимация идёт, кнопки игнорируются.
 const ANIM_LENGTH := {"eat": 8, "play": 8, "no": 4, "clean": 6, "evolve": 10, "heal": 6}
@@ -88,6 +89,7 @@ var profile_changed := false
 var notify_permission_wanted := false  # main.gd запрашивает системное разрешение и сбрасывает флаг
 var after_ask := ""                     # куда вернуться с экрана разрешения
 var bag_item := 0
+var license_page := 0           # страница на экране лицензии Godot
 var bag_action := -1             # строка подменю расходника; -1 — подменю закрыто
 var selected := -1               # -1 — ничего не выбрано
 var choice := 0                  # какой питомец показан на экране выбора
@@ -132,7 +134,7 @@ func _icons() -> Array:
 
 
 func _bag_icons() -> Array:
-	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT, Sprites.ICON_NEW, Sprites.ICON_PREMIUM, Sprites.ICON_TIME]
+	return [Sprites.ITEM_PILL, Sprites.ITEM_SYRINGE, Sprites.ITEM_UMBRELLA, Sprites.ICON_SETTINGS, Sprites.ICON_ABOUT, Sprites.ICON_NEW, Sprites.ICON_PREMIUM, Sprites.ICON_LICENSES, Sprites.ICON_TIME]
 
 
 func _is_birth() -> bool:
@@ -235,6 +237,9 @@ func _walk() -> void:
 
 ## Выбор следующей иконки (на экране выбора — предыдущий питомец).
 func press_a() -> void:
+	if mode == "license":
+		_license_step(1)
+		return
 	if mode in ["notify_ask", "about", "abandon"]:
 		return
 	if mode == "select":
@@ -322,7 +327,7 @@ func press_b() -> void:
 	elif s.sleeping:
 		return  # спящего не кормим и не развлекаем
 	elif selected == FEED:
-		if s.satiety >= FULL_THRESHOLD:
+		if s.satiety >= FULL_THRESHOLD or s.sick:  # больной не ест, пока не вылечат
 			_set_mode("no")
 		else:
 			s.satiety = minf(100.0, s.satiety + FEED_AMOUNT)
@@ -340,7 +345,7 @@ func press_b() -> void:
 
 ## Отмена: снять выбор (на экране выбора — следующий питомец).
 func press_c() -> void:
-	if mode == "about" or mode == "abandon":
+	if mode in ["about", "license", "abandon"]:
 		_set_mode("bag")
 		return
 	if mode == "notify_ask":
@@ -379,6 +384,8 @@ func swipe(dir: int) -> void:
 		choice = posmod(choice + dir, Sprites.PETS.size())
 	elif mode == "bag":
 		_bag_step(dir)
+	elif mode == "license":
+		_license_step(dir)
 
 
 func _hit(rect: Rect2i, action: Callable) -> void:
@@ -444,6 +451,10 @@ func _use_bag_item() -> void:
 	if bag_item == BAG_ABOUT:
 		_set_mode("about")
 		return
+	if bag_item == BAG_LICENSES:
+		license_page = 0
+		_set_mode("license")
+		return
 	if bag_item == BAG_NEW:
 		_set_mode("abandon")  # экран подтверждения: бросить питомца
 		return
@@ -491,7 +502,7 @@ func _use_bag_item() -> void:
 		_set_mode("no")
 		return
 	if bag_item == PILL:
-		if not s.sick or not (pills_left() or profile.pills):
+		if not (s.sick or s.health < 100) or not (pills_left() or profile.pills):
 			_set_mode("no")
 			return
 		if pills_left():  # сначала 5 бесплатных в день, потом купленные
@@ -502,19 +513,21 @@ func _use_bag_item() -> void:
 		else:
 			profile.pills -= 1
 			profile_changed = true
+		s.health = minf(100.0, s.health + PILL_HEALTH)
 		s.fever = maxf(0.0, s.fever - PILL_FEVER)
-		if s.fever < 1:  # не сравниваем с нулём: температура копится дробями, остаток 1e-7 не болезнь
+		if s.sick and s.fever < 1:  # не сравниваем с нулём: температура копится дробями, остаток 1e-7 не болезнь
 			s.sick = false  # вылечили
 			s.fever = 0.0
 	elif bag_item == SYRINGE:
 		if not profile.syringes:
 			_set_mode("no")
 			return
-		# Шприц лечит всё сразу: болезнь, голод, усталость.
+		# Шприц лечит всё сразу: болезнь, здоровье, голод, усталость.
 		profile.syringes -= 1
 		profile_changed = true
 		s.sick = false
 		s.fever = 0.0
+		s.health = 100.0
 		s.satiety = 100.0
 		s.energy = 100.0
 	_set_mode("heal")
@@ -527,7 +540,7 @@ func render(lcd: Lcd) -> void:
 	hits.clear()
 	_dotted(lcd, SEPARATOR_TOP)
 	_dotted(lcd, SEPARATOR_BOTTOM)
-	if mode in ["settings", "bag", "notify_ask", "about", "abandon"]:
+	if mode in ["settings", "bag", "notify_ask", "about", "license", "abandon"]:
 		call("_draw_" + mode, lcd)
 		lcd.flush()
 		return
@@ -813,8 +826,8 @@ func _draw_heal(lcd: Lcd) -> void:
 	var lk := look()
 	var x := _home_x()
 	var y := _y_for(lk.h)
+	_draw_umbrella(lcd, x, y, lk.w)  # до питомца: зонтик гасит всё под куполом
 	lcd.blit(lk.happy, x, y)
-	_draw_umbrella(lcd, x, y, lk.w)
 	var plus: Sprites.Sprite = Sprites.FONT["+"]
 	lcd.pen = Palette.index("r")
 	lcd.fill = 0
@@ -961,10 +974,89 @@ OS: %s %s" % [version(), OS.get_model_name(), OS.get_name(), OS.get_version()]
 
 func _draw_about(lcd: Lcd) -> void:
 	draw_text(lcd, "ABOUT", 15 + TOP)
-	var lines := ["PIXEL PET", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS"]
+	var lines := ["PIXEL PET", "V " + version(), "", "MADE BY SNI10", "WITH LOVE", "TO PETS", "POWERED BY", "GODOT ENGINE"]
 	for i in lines.size():
 		draw_text(lcd, lines[i], 48 + TOP + i * 11)
 	_hints(lcd, ICON_Y, [["FEEDBACK", press_b]])
+	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
+
+
+# --- экран лицензии Godot (MIT требует показать её текст); листается свайпом и A по кругу ---
+
+const LICENSE_LINES_PER_PAGE := 13
+
+
+func _license_step(d: int) -> void:
+	license_page = posmod(license_page + d, license_pages())
+
+## Текст по словам в строки шириной до width точек; слово длиннее строки режется.
+static func wrap_text(text: String, width: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	for para in text.split("\n"):
+		var line := ""
+		for word in para.split(" ", false):
+			var both: String = word if line == "" else line + " " + word
+			if text_width(both, 1) <= width:
+				line = both
+				continue
+			if line != "":
+				out.append(line)
+			line = word
+			while text_width(line, 1) > width:
+				var n := line.length() - 1
+				while n > 1 and text_width(line.left(n), 1) > width:
+					n -= 1
+				out.append(line.left(n))
+				line = line.substr(n)
+		out.append(line)
+	return out
+
+
+## Основные сторонние компоненты движка (по docs.godotengine.org «Complying with licenses») и что о них сказать.
+const LICENSE_THIRD_PARTY := {
+	"The FreeType Project": "Portions of this software are copyright The FreeType Project (www.freetype.org). All rights reserved.",
+	"ENet": "MIT license, same text as Godot above.",
+	"Mbed TLS": "Apache License 2.0: www.apache.org/licenses/LICENSE-2.0",
+}
+
+
+## Лицензия Godot и основные сторонние компоненты; копирайты берём у движка, чтобы не устаревали.
+static func license_text() -> String:
+	var t := "GODOT ENGINE\n" + Engine.get_license_text().strip_edges() + "\n"
+	for c in Engine.get_copyright_info():
+		if c.name in LICENSE_THIRD_PARTY:
+			t += "\n" + c.name.to_upper() + "\n"
+			for p in c.parts:
+				for cr in p.copyright:
+					t += "(C) " + cr + "\n"
+			t += LICENSE_THIRD_PARTY[c.name] + "\n"
+	return t
+
+
+static var _license_lines := PackedStringArray()  # переносим один раз, не на каждый кадр
+
+
+static func license_lines() -> PackedStringArray:
+	if _license_lines.is_empty():
+		_license_lines = wrap_text(license_text(), COLS - 2)
+	return _license_lines
+
+
+static func license_pages() -> int:
+	return ceili(license_lines().size() / float(LICENSE_LINES_PER_PAGE))
+
+
+func _draw_license(lcd: Lcd) -> void:
+	var lines := license_lines()
+	draw_text(lcd, "LICENSES", 15 + TOP)
+	draw_text(lcd, "%d/%d" % [license_page + 1, license_pages()], 24 + TOP)
+	var first := license_page * LICENSE_LINES_PER_PAGE
+	for i in mini(LICENSE_LINES_PER_PAGE, lines.size() - first):
+		draw_text(lcd, lines[first + i], 38 + TOP + i * 7, 1)
+	# Тап по левой половине текста — назад, по правой — дальше (как и свайп).
+	_hit(Rect2i(0, SEPARATOR_TOP, COLS / 2, SEPARATOR_BOTTOM - SEPARATOR_TOP), _license_step.bind(-1))
+	_hit(Rect2i(COLS / 2, SEPARATOR_TOP, COLS - COLS / 2, SEPARATOR_BOTTOM - SEPARATOR_TOP), _license_step.bind(1))
+	_hints(lcd, ICON_Y, [["NEXT", press_a]])
 	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 
 
@@ -1026,6 +1118,6 @@ func _draw_bag(lcd: Lcd) -> void:
 			_hints(lcd, ICON_Y, [["NEXT", press_a], ["MENU", press_b]])
 		_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
 		return
-	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT, BAG_NEW] else "SET"
+	var action := "OPEN" if bag_item in [BAG_SETTINGS, BAG_ABOUT, BAG_NEW, BAG_LICENSES] else "SET"
 	_hints(lcd, ICON_Y, [["NEXT", press_a], [action, press_b]])
 	_hints(lcd, ICON_Y + 9, [["BACK", press_c]])
