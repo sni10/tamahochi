@@ -186,6 +186,12 @@ func test_game() -> void:
 	check(g.mode == "no" and g.state.satiety == 96, "сытый отказывается")
 	g = Game.new(_adult())
 	g.state.satiety = 50
+	g.state.sick = true
+	g.press_a()
+	g.press_b()
+	check(g.mode == "no" and g.state.satiety == 50, "больной не ест")
+	g = Game.new(_adult())
+	g.state.satiety = 50
 	g.press_a()
 	g.press_b()
 	g.press_a()
@@ -234,6 +240,10 @@ func test_game() -> void:
 	g.mode = "bag"
 	_bag_use(g)
 	check(not g.state.sick and g.state.fever == 0.0, "остаток температуры 1e-7 — тоже вылечен")
+	g.state.health = 50
+	g.mode = "bag"
+	_bag_use(g)
+	check(g.mode == "heal" and g.state.health == 60 and not g.state.sick, "таблетка раненому: +10 здоровья")
 	g.state.pills_day = "2000-01-01"
 	g.state.pills_used = 5
 	check(g.pills_left() == 5, "новый день — снова 5 таблеток")
@@ -244,8 +254,9 @@ func test_game() -> void:
 	g.mode = "bag"
 	g.profile.syringes = 2
 	g.state.satiety = 10
+	g.state.health = 20
 	_bag_use(g)
-	check(g.state.satiety == 100 and g.profile.syringes == 1 and g.profile_changed, "шприц")
+	check(g.state.satiety == 100 and g.state.health == 100 and g.profile.syringes == 1 and g.profile_changed, "шприц")
 	g.mode = "bag"
 	g.state.sick = true
 	g.state.poops = 2
@@ -306,6 +317,8 @@ func test_storage() -> void:
 	f.close()
 	var p := Storage.load_profile(path)
 	check(p.syringes == 3 and p.owned_pets == ["cat"], "профиль")
+	p = Storage.load_profile("user://nope.json")
+	check(p.syringes == 1 and p.umbrellas == 3 and p.pills == 0, "новый игрок: шприц и 3 зонтика в подарок")
 	DirAccess.remove_absolute(path)
 
 

@@ -57,6 +57,7 @@ const TIME_SPEEDS := [1.0, 10.0, 60.0, 600.0]
 const FEEDBACK_EMAIL := "d.strelets.a@gmail.com"
 const FREE_PILLS_PER_DAY := 5
 const PILL_FEVER := 10.0
+const PILL_HEALTH := 10.0
 
 ## Длительность анимаций в тиках; пока анимация идёт, кнопки игнорируются.
 const ANIM_LENGTH := {"eat": 8, "play": 8, "no": 4, "clean": 6, "evolve": 10, "heal": 6}
@@ -326,7 +327,7 @@ func press_b() -> void:
 	elif s.sleeping:
 		return  # спящего не кормим и не развлекаем
 	elif selected == FEED:
-		if s.satiety >= FULL_THRESHOLD:
+		if s.satiety >= FULL_THRESHOLD or s.sick:  # больной не ест, пока не вылечат
 			_set_mode("no")
 		else:
 			s.satiety = minf(100.0, s.satiety + FEED_AMOUNT)
@@ -501,7 +502,7 @@ func _use_bag_item() -> void:
 		_set_mode("no")
 		return
 	if bag_item == PILL:
-		if not s.sick or not (pills_left() or profile.pills):
+		if not (s.sick or s.health < 100) or not (pills_left() or profile.pills):
 			_set_mode("no")
 			return
 		if pills_left():  # сначала 5 бесплатных в день, потом купленные
@@ -512,19 +513,21 @@ func _use_bag_item() -> void:
 		else:
 			profile.pills -= 1
 			profile_changed = true
+		s.health = minf(100.0, s.health + PILL_HEALTH)
 		s.fever = maxf(0.0, s.fever - PILL_FEVER)
-		if s.fever < 1:  # не сравниваем с нулём: температура копится дробями, остаток 1e-7 не болезнь
+		if s.sick and s.fever < 1:  # не сравниваем с нулём: температура копится дробями, остаток 1e-7 не болезнь
 			s.sick = false  # вылечили
 			s.fever = 0.0
 	elif bag_item == SYRINGE:
 		if not profile.syringes:
 			_set_mode("no")
 			return
-		# Шприц лечит всё сразу: болезнь, голод, усталость.
+		# Шприц лечит всё сразу: болезнь, здоровье, голод, усталость.
 		profile.syringes -= 1
 		profile_changed = true
 		s.sick = false
 		s.fever = 0.0
+		s.health = 100.0
 		s.satiety = 100.0
 		s.energy = 100.0
 	_set_mode("heal")

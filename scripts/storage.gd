@@ -97,7 +97,12 @@ static func save_settings(settings: Settings, path := SETTINGS_PATH) -> void:
 
 static func load_profile(path := PROFILE_PATH) -> Profile:
 	var data: Variant = _read(path)
-	return Profile.from_dict(data) if data != null else Profile.new()
+	if data != null:
+		return Profile.from_dict(data)
+	var p := Profile.new()  # новый игрок: шприц и 3 зонтика в подарок — понять, зачем они
+	p.syringes = 1
+	p.umbrellas = 3
+	return p
 
 
 static func save_profile(profile: Profile, path := PROFILE_PATH) -> void:
